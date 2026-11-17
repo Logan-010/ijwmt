@@ -167,6 +167,27 @@ decode d = do
       unless (BS.length raw == width) (Left "Invalid hash length")
       pure raw
 
+    sha1Bytes value = do
+      raw <- bytes value
+      case BS.length raw of
+        20 -> Right raw
+        40 -> BS.pack <$> decodeHex (BS.unpack raw)
+        _ -> Left "sha1 must be 20 binary bytes or 40 hexadecimal digits"
+
+    decodeHex [] = Right []
+    decodeHex (hi : lo : rest) = do
+      high <- hexDigit hi
+      low <- hexDigit lo
+      decoded <- decodeHex rest
+      pure (high * 16 + low : decoded)
+    decodeHex _ = Left "Invalid hexadecimal sha1"
+
+    hexDigit digit
+      | digit >= 48 && digit <= 57 = Right (digit - 48)
+      | digit >= 65 && digit <= 70 = Right (digit - 65 + 10)
+      | digit >= 97 && digit <= 102 = Right (digit - 97 + 10)
+      | otherwise = Left "Invalid hexadecimal sha1"
+
     parseFile components values = do
       attrs <- maybe (Right BS.empty) bytes (Map.lookup "attr" values)
       let flags = FileAttributes
@@ -181,7 +202,7 @@ decode d = do
       when (fileLength < 0) (Left "File length must not be negative")
       link <- optional "symlink path" filePath values
       when (symlink flags && link == Nothing) (Left "Missing symlink path")
-      checksum <- optional "sha1" (hashBytes 20) values
+      checksum <- optional "sha1" sha1Bytes values
       root <- optional "pieces root" (hashBytes 32) values
       pure TorrentFile
         { path = components,
