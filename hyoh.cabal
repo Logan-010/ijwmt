@@ -20,11 +20,13 @@ executable hyoh
   import:           warnings
   main-is:          Main.hs
   other-modules:    Data.Bencode
-
+                    Data.Torrent
+  
   -- other-extensions:
   build-depends:
     , base        ^>=4.20.2.0
     , bytestring
+    , text
     , containers
 
   hs-source-dirs:   app

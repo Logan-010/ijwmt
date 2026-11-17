@@ -1,4 +1,4 @@
-module Data.Bencode where
+module Data.Bencode (decode, encode, BencodeValue (..)) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -13,15 +13,18 @@ data BencodeValue
   | BDict (Map.Map ByteString BencodeValue)
   deriving (Show, Eq)
 
-parseString :: ByteString -> Either String ByteString
-parseString d = case BS.elemIndex ':' d of
-  Just colonIndex -> case (readMaybe . BS.unpack . BS.take colonIndex) d of
-    Just l ->
-      let ss = BS.drop (colonIndex + 1) d
-       in if BS.length ss /= l then Left "Invalid string length" else Right ss
-    Nothing -> Left "Invalid encoded value"
-  Nothing -> Left "Invalid encoded value"
-
+parseString :: ByteString -> Either String (ByteString, ByteString)
+parseString d =
+  case BS.elemIndex ':' d of
+    Nothing -> Left "Invalid encoded string"
+    Just colonIndex ->
+      case readMaybe (BS.unpack (BS.take colonIndex d)) :: Maybe Int of
+        Nothing -> Left "Invalid string length"
+        Just n ->
+          let rest = BS.drop (colonIndex + 1) d
+           in if n < 0 || n > BS.length rest
+                then Left "Invalid string length"
+                else Right (BS.take n rest, BS.drop n rest)
 
 parseInt :: ByteString -> Either String Integer
 parseInt d
@@ -29,22 +32,17 @@ parseInt d
   | BS.head d /= 'i' || BS.last d /= 'e' = Left "Invalid integer"
   | otherwise =
       let digits = BS.unpack (BS.init (BS.tail d))
-          validDigits = all (`elem` ['0'..'9'])
+          validDigits = all (`elem` ['0' .. '9'])
           valid = case digits of
             "0" -> True
-            '-':v:rs -> v /= '0' && (validDigits $ v : rs)
-            v:rs -> v /= '0' && (validDigits $ v : rs)
+            '-' : v : rs -> v /= '0' && (validDigits $ v : rs)
+            v : rs -> v /= '0' && (validDigits $ v : rs)
             _ -> False
        in if valid
             then case readMaybe digits of
               Just n -> Right n
               Nothing -> Left "Invalid integer"
             else Left "Invalid integer"
-
-itemLength :: ByteString -> Either String Int
-itemLength d = do
-  (_, rest) <- parseItem d
-  pure $ BS.length d - BS.length rest
 
 parseList :: ByteString -> Either String ([BencodeValue], ByteString)
 parseList = inner []
@@ -62,37 +60,17 @@ parseMap = inner Map.empty
     inner acc s
       | BS.null s = Left "Unterminated map"
       | BS.head s == 'e' = Right (acc, BS.tail s)
-      | otherwise =
-          case BS.elemIndex ':' s of
-            Nothing -> Left "Invalid encoded string"
-            Just colonIndex ->
-              case readMaybe (BS.unpack (BS.take colonIndex s)) :: Maybe Int of
-                Nothing -> Left "Invalid string length"
-                Just n ->
-                  let len = colonIndex + 1
-                   in if n < 0 || n > BS.length s - len
-                        then Left "Invalid string length"
-                        else do
-                          key <- parseString (BS.take (len + n) s)
-                          (value, rest) <- parseItem $ BS.drop (len + n) s
-                          inner (Map.insert key value acc) rest
+      | otherwise = do
+          (key, rest) <- parseString s
+          (value, remaining) <- parseItem rest
+          inner (Map.insert key value acc) remaining
 
 parseItem :: ByteString -> Either String (BencodeValue, ByteString)
 parseItem d
   | BS.null d = Left "Unexpected end of input"
-  | isDigit (BS.head d) =
-      case BS.elemIndex ':' d of
-        Nothing -> Left "Invalid encoded string"
-        Just colonIndex ->
-          case readMaybe (BS.unpack (BS.take colonIndex d)) :: Maybe Int of
-            Nothing -> Left "Invalid string length"
-            Just n ->
-              let len = colonIndex + 1
-               in if n < 0 || n > BS.length d - len
-                    then Left "Invalid string length"
-                    else do
-                      value <- parseString (BS.take (len + n) d)
-                      Right (BString value, BS.drop (len + n) d)
+  | isDigit (BS.head d) = do
+      (value, rest) <- parseString d
+      Right (BString value, rest)
   | otherwise =
       case BS.head d of
         'd' -> do
@@ -116,3 +94,20 @@ decode d = do
   if BS.null rest
     then Right value
     else Left "Trailing data after encoded value"
+
+encode :: BencodeValue -> ByteString
+encode (BString s) =
+  BS.pack (show (BS.length s)) `BS.append` BS.cons ':' s
+encode (BInt n) =
+  BS.pack ("i" ++ show n ++ "e")
+encode (BList xs) =
+  BS.concat [BS.singleton 'l', BS.concat (map encode xs), BS.singleton 'e']
+encode (BDict m) =
+  BS.concat
+    [ BS.singleton 'd',
+      BS.concat
+        [ BS.append (encode (BString k)) (encode v)
+        | (k, v) <- Map.toAscList m
+        ],
+      BS.singleton 'e'
+    ]
