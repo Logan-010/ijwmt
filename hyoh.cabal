@@ -1,24 +1,27 @@
-cabal-version:      3.0
-name:               hyoh
-version:            0.1.0.0
-synopsis:           Purely functional torrenting
-description:        Purely functional minimalist bittorrent client in your terminal
-homepage:           https://github.com/Logan-010/hyoh
-license:            MIT
-license-file:       LICENSE
-author:             Logan Briesemeister
-maintainer:         ""
-category:           Network
-build-type:         Simple
+cabal-version: 3.0
+name:          hyoh
+version:       0.1.0.0
+synopsis:      Purely functional torrenting
+description:
+  Purely functional minimalist bittorrent client in your terminal
+
+homepage:      https://github.com/Logan-010/hyoh
+license:       MIT
+license-file:  LICENSE
+author:        Logan Briesemeister
+maintainer:    ""
+category:      Network
+build-type:    Simple
 
 common warnings
-    ghc-options: -Wall
+  ghc-options: -Wall
 
 executable hyoh
-    import:           warnings
-    main-is:          Main.hs
-    -- other-modules:
-    -- other-extensions:
-    build-depends:    base ^>=4.20.2.0
-    hs-source-dirs:   app
-    default-language: Haskell2010
+  import:           warnings
+  main-is:          Main.hs
+
+  -- other-modules:
+  -- other-extensions:
+  build-depends:    base ^>=4.20.2.0
+  hs-source-dirs:   app
+  default-language: Haskell2010
