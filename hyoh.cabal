@@ -21,6 +21,7 @@ executable hyoh
   main-is:          Main.hs
   other-modules:    Data.Bencode
                     Data.Torrent
+                    Data.Torrent.Wire
   
   -- other-extensions:
   build-depends:
@@ -28,6 +29,7 @@ executable hyoh
     , bytestring
     , text
     , containers
+    , entropy
 
   hs-source-dirs:   app
   default-language: Haskell2010

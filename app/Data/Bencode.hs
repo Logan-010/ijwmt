@@ -35,8 +35,8 @@ parseInt d
           validDigits = all (`elem` ['0' .. '9'])
           valid = case digits of
             "0" -> True
-            '-' : v : rs -> v /= '0' && (validDigits $ v : rs)
-            v : rs -> v /= '0' && (validDigits $ v : rs)
+            '-' : v : rs -> v /= '0' && validDigits (v : rs)
+            v : rs -> v /= '0' && validDigits (v : rs)
             _ -> False
        in if valid
             then case readMaybe digits of
