@@ -30,6 +30,8 @@ executable hyoh
     , text
     , containers
     , entropy
+    , cryptohash-sha1
+    , cryptohash-sha256
 
   hs-source-dirs:   app
   default-language: Haskell2010
