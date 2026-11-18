@@ -17,7 +17,7 @@ run-dev: build-dev
 
 .PHONY: fmt
 fmt:
-	ormolu app/*.hs -i
+	ormolu app/**/*.hs -i
 	cabal-fmt *.cabal -i
 
 .PHONY: lint

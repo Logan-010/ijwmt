@@ -1,4 +1,6 @@
-module Data.Torrent.Wire (generatePeerId, ReservedFlag (..), generateReserved, handshake, Message (..), encodeMessage, decodeMessage) where
+{-# LANGUAGE OverloadedStrings #-}
+
+module Data.BitTorrent.Wire (generatePeerId, ReservedFlag (..), generateReserved, encodeHandshake, decodeHandshake, Message (..), encodeMessage, decodeMessage) where
 
 import Data.Bits (Bits ((.|.)), shiftL)
 import Data.ByteString (ByteString)
@@ -32,8 +34,8 @@ generateReserved = BS.pack . foldl' setFlag (replicate 8 0)
           | (i, b) <- zip [0 :: Integer ..] bytes
           ]
 
-handshake :: ByteString -> ByteString -> ByteString -> ByteString
-handshake reserved infoHash peerId
+encodeHandshake :: ByteString -> ByteString -> ByteString -> ByteString
+encodeHandshake reserved infoHash peerId
   | BS.length reserved /= 8 = error "Reserved must be 8 bytes"
   | BS.length infoHash /= 20 = error "Info hash must be 20 bytes"
   | BS.length peerId /= 20 = error "Peer ID must be 20 bytes"
@@ -45,6 +47,16 @@ handshake reserved infoHash peerId
           infoHash,
           peerId
         ]
+
+decodeHandshake :: ByteString -> Either String (ByteString, ByteString, ByteString)
+decodeHandshake h
+  | BS.length h /= 68 || (unpackInt $ slice 0 4 h) /= 19 || (slice 4 19 h) /= "BitTorrent protocol" = Left "Invalid handshake"
+  | otherwise =
+      Right
+        ( slice 20 8 h,
+          slice 28 20 h,
+          slice 48 20 h
+        )
 
 data Message
   = KeepAlive

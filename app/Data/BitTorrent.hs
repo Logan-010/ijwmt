@@ -1,20 +1,20 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.Torrent(decode, Torrent(..), FileAttributes(..), TorrentFile(..), TorrentV1(..), TorrentV2(..), TorrentVersion) where
+module Data.BitTorrent (decode, Torrent (..), FileAttributes (..), TorrentFile (..), TorrentV1 (..), TorrentV2 (..), TorrentVersion) where
 
 import Control.Monad (unless, when)
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
-import Data.Bencode (BencodeValue (..), encode)
+import Data.BitTorrent.Bencode (BencodeValue (..), encode)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Data.Maybe (isNothing)
 
 data TorrentFile = TorrentFile
   { path :: [Text],
@@ -99,19 +99,20 @@ decode d = do
         Nothing -> Right (V2 torrentV2)
         Just _ -> Hybrid <$> v1 <*> pure torrentV2
     Just _ -> Left "Unsupported meta version"
-  pure Torrent
-    { name = torrentName,
-      announce = tracker,
-      announceList = trackers,
-      webSeeds = seeds,
-      comment = torrentComment,
-      createdBy = creator,
-      creationDate = created,
-      pieceLength = size,
-      private = isPrivate,
-      source = torrentSource,
-      version = torrentVersion
-    }
+  pure
+    Torrent
+      { name = torrentName,
+        announce = tracker,
+        announceList = trackers,
+        webSeeds = seeds,
+        comment = torrentComment,
+        createdBy = creator,
+        creationDate = created,
+        pieceLength = size,
+        private = isPrivate,
+        source = torrentSource,
+        version = torrentVersion
+      }
   where
     dictionary (BDict values) = Right values
     dictionary _ = Left "Expected a dictionary"
@@ -144,8 +145,12 @@ decode d = do
     privateFlag _ = Left "private must be 0 or 1"
 
     validateComponent component =
-      when (Text.null component || component == "." || component == ".."
-        || Text.any (`elem` ['/', '\\', '\0']) component)
+      when
+        ( Text.null component
+            || component == "."
+            || component == ".."
+            || Text.any (`elem` ['/', '\\', '\0']) component
+        )
         (Left "Invalid file path component")
 
     filePath value = do
@@ -191,12 +196,13 @@ decode d = do
 
     parseFile components values = do
       attrs <- maybe (Right BS.empty) bytes (Map.lookup "attr" values)
-      let flags = FileAttributes
-            { padding = BS.elem 112 attrs,
-              executable = BS.elem 120 attrs,
-              hidden = BS.elem 104 attrs,
-              symlink = BS.elem 108 attrs
-            }
+      let flags =
+            FileAttributes
+              { padding = BS.elem 112 attrs,
+                executable = BS.elem 120 attrs,
+                hidden = BS.elem 104 attrs,
+                symlink = BS.elem 108 attrs
+              }
       fileLength <- case Map.lookup "length" values of
         Nothing | symlink flags -> Right 0
         _ -> required "length" values >>= integer
@@ -205,14 +211,15 @@ decode d = do
       when (symlink flags && isNothing link) (Left "Missing symlink path")
       checksum <- optional "sha1" sha1Bytes values
       root <- optional "pieces root" (hashBytes 32) values
-      pure TorrentFile
-        { path = components,
-          length = fileLength,
-          attributes = flags,
-          symlinkPath = link,
-          sha1 = checksum,
-          piecesRoot = root
-        }
+      pure
+        TorrentFile
+          { path = components,
+            length = fileLength,
+            attributes = flags,
+            symlinkPath = link,
+            sha1 = checksum,
+            piecesRoot = root
+          }
 
     parseV1 torrentName size encodedInfo info = do
       pieceHashes' <- required "pieces" info >>= hashes 20
@@ -221,37 +228,45 @@ decode d = do
           file <- parseFile [torrentName] info
           pure ([file], True)
         (Nothing, Just value) -> do
-          torrentFiles <- listOf (\entry -> do
-            values <- dictionary entry
-            components <- required "path" values >>= filePath
-            parseFile components values) value
+          torrentFiles <-
+            listOf
+              ( \entry -> do
+                  values <- dictionary entry
+                  components <- required "path" values >>= filePath
+                  parseFile components values
+              )
+              value
           when (null torrentFiles) (Left "files must not be empty")
           pure (torrentFiles, False)
         _ -> Left "Expected exactly one of length or files"
       let total = sum [n | TorrentFile {length = n} <- torrentFiles]
           count = (total + size - 1) `div` size
-      unless (toInteger (Prelude.length pieceHashes') == count)
+      unless
+        (toInteger (Prelude.length pieceHashes') == count)
         (Left "Piece hash count does not match file lengths")
-      pure TorrentV1
-        { infoHash = SHA1.hash encodedInfo,
-          pieceHashes = pieceHashes',
-          files = torrentFiles,
-          singleFile = isSingle
-        }
+      pure
+        TorrentV1
+          { infoHash = SHA1.hash encodedInfo,
+            pieceHashes = pieceHashes',
+            files = torrentFiles,
+            singleFile = isSingle
+          }
 
     parseV2 size encodedInfo top info = do
-      unless (size >= 16384 && powerOfTwo size)
+      unless
+        (size >= 16384 && powerOfTwo size)
         (Left "v2 piece length must be a power of two and at least 16384")
       tree <- required "file tree" info >>= dictionary
       torrentFiles <- walkTree [] tree
       when (null torrentFiles) (Left "File tree must not be empty")
       layers <- maybe (Right Map.empty) parseLayers (Map.lookup "piece layers" top)
       mapM_ (validateLayer size layers) torrentFiles
-      pure TorrentV2
-        { infoHash = SHA256.hash encodedInfo,
-          files = torrentFiles,
-          pieceLayers = layers
-        }
+      pure
+        TorrentV2
+          { infoHash = SHA256.hash encodedInfo,
+            files = torrentFiles,
+            pieceLayers = layers
+          }
 
     powerOfTwo n
       | n == 1 = True
@@ -260,32 +275,44 @@ decode d = do
 
     walkTree components tree = case Map.lookup "" tree of
       Just leaf -> do
-        when (null components || Map.size tree /= 1)
+        when
+          (null components || Map.size tree /= 1)
           (Left "Invalid file tree leaf")
         values <- dictionary leaf
         file <- parseFile components values
         case file of
           TorrentFile {length = n, piecesRoot = root, attributes = flags} ->
-            when (n > 0 && not (symlink flags) && isNothing root)
+            when
+              (n > 0 && not (symlink flags) && isNothing root)
               (Left "Missing pieces root")
         pure [file]
-      Nothing -> concat <$> traverse (\(key, value) -> do
-        component <- text (BString key)
-        validateComponent component
-        children <- dictionary value
-        when (Map.null children) (Left "Empty file tree directory")
-        walkTree (components ++ [component]) children) (Map.toAscList tree)
+      Nothing ->
+        concat
+          <$> traverse
+            ( \(key, value) -> do
+                component <- text (BString key)
+                validateComponent component
+                children <- dictionary value
+                when (Map.null children) (Left "Empty file tree directory")
+                walkTree (components ++ [component]) children
+            )
+            (Map.toAscList tree)
 
     parseLayers value = do
       layers <- dictionary value
-      Map.fromList <$> traverse (\(root, layer) -> do
-        unless (BS.length root == 32) (Left "Invalid piece layer root")
-        layerHashes <- hashes 32 layer
-        pure (root, layerHashes)) (Map.toAscList layers)
+      Map.fromList
+        <$> traverse
+          ( \(root, layer) -> do
+              unless (BS.length root == 32) (Left "Invalid piece layer root")
+              layerHashes <- hashes 32 layer
+              pure (root, layerHashes)
+          )
+          (Map.toAscList layers)
 
     validateLayer size layers TorrentFile {length = n, piecesRoot = root, attributes = flags}
       | n <= size || symlink flags = Right ()
       | otherwise = do
           layer <- maybe (Left "Missing piece layer") Right (root >>= (`Map.lookup` layers))
-          unless (toInteger (Prelude.length layer) == (n + size - 1) `div` size)
+          unless
+            (toInteger (Prelude.length layer) == (n + size - 1) `div` size)
             (Left "Piece layer hash count does not match file length")

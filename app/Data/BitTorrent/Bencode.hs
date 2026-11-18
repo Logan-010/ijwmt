@@ -1,4 +1,4 @@
-module Data.Bencode (decode, encode, BencodeValue (..)) where
+module Data.BitTorrent.Bencode (decode, encode, BencodeValue (..)) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS

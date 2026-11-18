@@ -19,19 +19,20 @@ common warnings
 executable hyoh
   import:           warnings
   main-is:          Main.hs
-  other-modules:    Data.Bencode
-                    Data.Torrent
-                    Data.Torrent.Wire
-  
+  other-modules:
+    Data.BitTorrent
+    Data.BitTorrent.Bencode
+    Data.BitTorrent.Wire
+
   -- other-extensions:
   build-depends:
-    , base        ^>=4.20.2.0
+    , base               ^>=4.20.2.0
     , bytestring
-    , text
     , containers
-    , entropy
     , cryptohash-sha1
     , cryptohash-sha256
+    , entropy
+    , text
 
   hs-source-dirs:   app
   default-language: Haskell2010

@@ -1,8 +1,8 @@
 module Main (main) where
 
-import qualified Data.Bencode as BE
+import qualified Data.BitTorrent.Bencode as BE
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.Torrent as TR
+import qualified Data.BitTorrent as TR
 import System.Environment (getArgs)
 import System.IO (IOMode (ReadMode), openFile)
 
