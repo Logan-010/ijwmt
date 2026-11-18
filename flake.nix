@@ -1,5 +1,5 @@
 {
-  description = "Hyoh flake";
+  description = "Ijwmt flake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -39,7 +39,7 @@
         {
           # Add dependencies
           # default = pkgs.haskell.lib.addExtraLibraries (pkgs.haskell.lib.dontCheck (hs.callCabal2nix "project" ./. { })) [ <deps here> ];
-          default = pkgs.haskell.lib.dontCheck (pkgs.haskellPackages.callCabal2nix "project" ./. { });
+          default = pkgs.haskell.lib.dontCheck (pkgs.haskellPackages.callCabal2nix "ijwmt" ./. { });
         }
       );
 

@@ -1,9 +1,9 @@
 cabal-version: 3.0
-name:          hyoh
+name:          ijwmt
 version:       0.1.0.0
-synopsis:      Purely functional torrenting
+synopsis:      I just want my torrent - purely functional torrenting
 description:
-  Purely functional minimalist bittorrent client in your terminal
+  I just want my torrent - purely functional minimalist bittorrent client in your terminal
 
 homepage:      https://github.com/Logan-010/hyoh
 license:       MIT

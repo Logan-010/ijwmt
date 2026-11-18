@@ -1,31 +1,30 @@
-module Data.Torrent.Wire (generatePeerId, handshake, Message (..), encodeMessage) where
+module Data.Torrent.Wire (generatePeerId, handshake, Message (..), encodeMessage, decodeMessage) where
 
+import Data.Bits (Bits ((.|.)), shiftL)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Builder (toLazyByteString, word32BE)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
+import Data.Word (Word8)
 import System.Entropy (getEntropy)
 
 generatePeerId :: IO ByteString
 generatePeerId = getEntropy 20
 
-handshake :: Bool -> ByteString -> ByteString -> ByteString
-handshake v2 infoHash peerId
-  | BS.length hash /= 20 = error "Info hash must be 20 bytes"
+handshake :: ByteString -> ByteString -> ByteString -> ByteString
+handshake reserved infoHash peerId
+  | BS.length reserved /= 8 = error "Reserved must be 8 bytes"
+  | BS.length infoHash /= 20 = error "Info hash must be 20 bytes"
   | BS.length peerId /= 20 = error "Peer ID must be 20 bytes"
   | otherwise =
       BS.concat
         [ BS.singleton 19,
           BC.pack "BitTorrent protocol",
-          BS.replicate 8 0,
-          hash,
+          reserved,
+          infoHash,
           peerId
         ]
-  where
-    hash
-      | v2 = BS.take 20 infoHash
-      | otherwise = infoHash
 
 data Message
   = KeepAlive
@@ -43,53 +42,18 @@ data Message
   | HashReject (ByteString, Int, Int, Int, Int)
   deriving (Show, Eq)
 
-packInt :: Int -> BS.ByteString
+packInt :: Int -> ByteString
 packInt n =
   BL.toStrict $
     toLazyByteString (word32BE (fromIntegral n))
 
-packSingleInt :: Int -> BS.ByteString
+packSingleInt :: Int -> ByteString
 packSingleInt n = BS.singleton (fromIntegral n)
 
-{-
-0	choke	None
-1	unchoke	None
-2	interested	None
-3	not interested	None
-4	have	uint32 piece_index
-5	bitfield	Bit-packed piece availability
-6	request	uint32 index, begin, length
-7	piece	uint32 index, begin, bytes[]
-8	cancel Same as request
-
-21 hash_request
-uint32  message_length = 49
-uint8   message_id = 21
-byte[32] pieces_root
-uint32   base_layer
-uint32   index
-uint32   length
-uint32   proof_layers
-
-22 hashes
-uint32  message_length = 49 + 32*N
-uint8   message_id = 22
-byte[32] pieces_root
-uint32   base_layer
-uint32   index
-uint32   length
-uint32   proof_layers
-byte[32] hashes[N]
-
-23 hash_reject
-uint32  message_length = 49
-uint8   message_id = 23
-byte[32] pieces_root
-uint32   base_layer
-uint32   index
-uint32   length
-uint32   proof_layers
--}
+unpackInt :: BS.ByteString -> Int
+unpackInt =
+  BS.foldl' (\acc b -> (acc `shiftL` 8) .|. fromIntegral b) 0
+    . BS.take 4
 
 encodeMessage :: Message -> ByteString
 encodeMessage msg = case msg of
@@ -131,3 +95,109 @@ encodeMessage msg = case msg of
         error "Pieces root must be 32 bytes"
     | otherwise ->
         BS.concat $ packInt 49 : packSingleInt 23 : p : packInt b : packInt i : packInt l : [packInt pr]
+
+slice :: Int -> Int -> ByteString -> ByteString
+slice start len =
+  BS.take len . BS.drop start
+
+decodeMessage :: ByteString -> Either String Message
+decodeMessage d
+  | BS.length d < 4 =
+      Left "Missing length prefix"
+  | n == 0 =
+      if BS.length d == 4
+        then Right KeepAlive
+        else Left "Invalid keep-alive length"
+  | n > BS.length d - 4 =
+      Left "Truncated message"
+  | n < BS.length d - 4 =
+      Left "Extra bytes after message"
+  | otherwise =
+      let code = BS.index d 4
+          msg = BS.drop 5 d
+       in decodePayload code msg
+  where
+    n = unpackInt (BS.take 4 d)
+
+decodePayload :: Word8 -> ByteString -> Either String Message
+decodePayload code msg =
+  case code of
+    0
+      | BS.length msg /= 0 -> Left "Invalid message"
+      | otherwise -> Right Choke
+    1
+      | BS.length msg /= 0 -> Left "Invalid message"
+      | otherwise -> Right Unchoke
+    2
+      | BS.length msg /= 0 -> Left "Invalid message"
+      | otherwise -> Right Interested
+    3
+      | BS.length msg /= 0 -> Left "Invalid message"
+      | otherwise -> Right NotInterested
+    4
+      | BS.length msg /= 4 -> Left "Invalid message"
+      | otherwise -> Right $ Have $ unpackInt msg
+    5 -> Right $ BitField msg
+    6
+      | BS.length msg /= 12 -> Left "Invalid message"
+      | otherwise ->
+          Right $
+            Request
+              ( unpackInt $ slice 0 4 msg,
+                unpackInt $ slice 4 4 msg,
+                unpackInt $ slice 8 4 msg
+              )
+    7
+      | BS.length msg < 8 -> Left "Invalid message"
+      | otherwise ->
+          Right $
+            Piece
+              ( unpackInt $ slice 0 4 msg,
+                unpackInt $ slice 4 4 msg,
+                slice 8 (BS.length msg - 8) msg
+              )
+    8
+      | BS.length msg /= 12 -> Left "Invalid message"
+      | otherwise ->
+          Right $
+            Cancel
+              ( unpackInt $ slice 0 4 msg,
+                unpackInt $ slice 4 4 msg,
+                unpackInt $ slice 8 4 msg
+              )
+    21
+      | BS.length msg /= 48 -> Left "Invalid message"
+      | otherwise ->
+          Right $
+            HashRequest
+              ( slice 0 32 msg,
+                unpackInt $ slice 32 4 msg,
+                unpackInt $ slice 36 4 msg,
+                unpackInt $ slice 40 4 msg,
+                unpackInt $ slice 44 4 msg
+              )
+    22
+      | BS.length msg < 48 || (BS.length msg - 48) `mod` 32 /= 0 -> Left "Invalid message"
+      | otherwise ->
+          let hashes = (BS.length msg - 48) `div` 32
+           in Right $
+                Hashes
+                  ( slice 0 32 msg,
+                    unpackInt $ slice 32 4 msg,
+                    unpackInt $ slice 36 4 msg,
+                    unpackInt $ slice 40 4 msg,
+                    unpackInt $ slice 44 4 msg,
+                    [slice (48 + i * 32) 32 msg | i <- [0 .. hashes - 1]]
+                  )
+    23
+      | BS.length msg /= 48 -> Left "Invalid message"
+      | otherwise ->
+          Right $
+            HashReject
+              ( slice 0 32 msg,
+                unpackInt $ slice 32 4 msg,
+                unpackInt $ slice 36 4 msg,
+                unpackInt $ slice 40 4 msg,
+                unpackInt $ slice 44 4 msg
+              )
+    _ -> Left "Invalid message"
