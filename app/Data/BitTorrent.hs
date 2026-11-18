@@ -15,6 +15,7 @@ import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Network.URL (URL, importURL)
 
 data TorrentFile = TorrentFile
   { path :: [Text],
@@ -57,9 +58,9 @@ data TorrentVersion
 
 data Torrent = Torrent
   { name :: Text,
-    announce :: Maybe Text,
-    announceList :: [[Text]],
-    webSeeds :: [Text],
+    announce :: Maybe URL,
+    announceList :: [[URL]],
+    webSeeds :: [URL],
     comment :: Maybe Text,
     createdBy :: Maybe Text,
     creationDate :: Maybe Integer,
@@ -77,8 +78,8 @@ decode d = do
   info <- dictionary infoValue
   torrentName <- required "name" info >>= text
   validateComponent torrentName
-  tracker <- optional "announce" text top
-  trackers <- maybe (Right []) (listOf (listOf text)) (Map.lookup "announce-list" top)
+  tracker <- optional "announce" url top
+  trackers <- maybe (Right []) (listOf (listOf url)) (Map.lookup "announce-list" top)
   seeds <- maybe (Right []) seedList (Map.lookup "url-list" top)
   torrentComment <- optional "comment" text top
   creator <- optional "created by" text top
@@ -137,8 +138,12 @@ decode d = do
 
     optional key parse values = traverse parse (Map.lookup key values)
 
-    seedList value@(BString _) = (: []) <$> text value
-    seedList value = listOf text value
+    url value = do
+      decoded <- text value
+      maybe (Left "Invalid URL") Right (importURL (Text.unpack decoded))
+
+    seedList value@(BString _) = (: []) <$> url value
+    seedList value = listOf url value
 
     privateFlag (BInt 0) = Right False
     privateFlag (BInt 1) = Right True

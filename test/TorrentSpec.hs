@@ -10,6 +10,7 @@ import qualified Data.BitTorrent.Bencode as Bencode
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
+import Network.URL (URL, importURL)
 import TestSupport
 
 tests :: [Test]
@@ -25,7 +26,7 @@ tests =
     ( "torrent: single web seed",
       do
         torrent <- either fail pure (parse singleInfo [("url-list", BString "https://seed/file")])
-        assertEqual ["https://seed/file"] (webSeeds torrent)
+        assertEqual [url "https://seed/file"] (webSeeds torrent)
     ),
     ("torrent: file attributes, symlink and checksums", attributesTest),
     ( "torrent: binary sha1",
@@ -78,9 +79,9 @@ tests =
             ]
           wanted =
             (expected (V1 (v1 info [file] True)))
-              { announce = Just "https://tracker/announce",
-                announceList = [["https://tracker/announce"], ["udp://backup"]],
-                webSeeds = ["https://seed/one", "https://seed/two"],
+              { announce = Just (url "https://tracker/announce"),
+                announceList = [[url "https://tracker/announce"], [url "udp://backup"]],
+                webSeeds = [url "https://seed/one", url "https://seed/two"],
                 comment = Just "hello",
                 createdBy = Just "ijwmt",
                 creationDate = Just 123456789,
@@ -106,6 +107,15 @@ tests =
       [("missing " ++ show key, remove key singleInfo, []) | key <- ["name", "piece length", "pieces", "length"]]
         ++ [("unsafe name " ++ show nameValue, set "name" (BString nameValue) singleInfo, []) | nameValue <- ["", ".", "..", "a/b", "a\\b", BS.pack [0], BS.pack [255]]]
         ++ [("non-positive piece length " ++ show n, set "piece length" (BInt n) singleInfo, []) | n <- [0, -1]]
+        ++ [ ("invalid URL in " ++ field ++ ": " ++ show raw, singleInfo, [(key, wrap (BString raw))])
+           | (field, key, wrap) <-
+               [ ("announce", "announce", id),
+                 ("announce-list", "announce-list", \value -> BList [BList [value]]),
+                 ("single web seed", "url-list", id),
+                 ("web seed list", "url-list", \value -> BList [value])
+               ],
+             raw <- ["http://tracker:bad/announce", BS.pack [255]]
+           ]
         ++ [ ("non-dictionary info", BList [], []),
              ("wrong name type", set "name" (BInt 1) singleInfo, []),
              ("wrong pieces type", set "pieces" (BList []) singleInfo, []),
@@ -144,6 +154,11 @@ tests =
 
 noAttributes :: FileAttributes
 noAttributes = FileAttributes False False False False
+
+url :: String -> URL
+url value = case importURL value of
+  Just parsed -> parsed
+  Nothing -> error ("Invalid URL fixture: " ++ value)
 
 dict :: [(ByteString, BencodeValue)] -> BencodeValue
 dict = BDict . Map.fromList
