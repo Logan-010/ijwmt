@@ -35,6 +35,10 @@ library
     Data.BitTorrent.Bencode
     Data.BitTorrent.Magnet
     Data.BitTorrent.Wire
+    Network.BitTorrent
+    Network.BitTorrent.Wire
+    Network.BitTorrent.Transport.TCP
+    Network.BitTorrent.Transport.MSE
 
   -- other-extensions:
   build-depends:
@@ -48,6 +52,7 @@ library
     , entropy
     , text
     , url
+    , network
 
   hs-source-dirs:   lib
   default-language: Haskell2010

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.BitTorrent.Wire (generatePeerId, ReservedFlag (..), generateReserved, encodeHandshake, decodeHandshake, Message (..), encodeMessage, decodeMessage) where
+module Data.BitTorrent.Wire (generatePeerId, ReservedFlag (..), generateReserved, encodeHandshake, decodeHandshake, Message (..), encodeMessage, decodeMessage, unpackInt) where
 
 import Data.Bits (Bits ((.|.)), shiftL)
 import Data.ByteString (ByteString)
