@@ -1,7 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.BitTorrent (decode, Torrent (..), FileAttributes (..), TorrentFile (..), TorrentV1 (..), TorrentV2 (..), TorrentVersion) where
+module Data.BitTorrent (decode, Torrent (..), FileAttributes (..), TorrentFile (..), TorrentV1 (..), TorrentV2 (..), TorrentVersion (..)) where
 
 import Control.Monad (unless, when)
 import qualified Crypto.Hash.SHA1 as SHA1

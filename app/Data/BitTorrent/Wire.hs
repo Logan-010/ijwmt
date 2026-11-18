@@ -50,7 +50,7 @@ encodeHandshake reserved infoHash peerId
 
 decodeHandshake :: ByteString -> Either String (ByteString, ByteString, ByteString)
 decodeHandshake h
-  | BS.length h /= 68 || (unpackInt $ slice 0 4 h) /= 19 || (slice 4 19 h) /= "BitTorrent protocol" = Left "Invalid handshake"
+  | BS.length h /= 68 || BS.head h /= 19 || slice 1 19 h /= "BitTorrent protocol" = Left "Invalid handshake"
   | otherwise =
       Right
         ( slice 20 8 h,

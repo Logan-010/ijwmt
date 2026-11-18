@@ -15,6 +15,10 @@ run: build
 run-dev: build-dev
 	cabal run exe:hyoh
 
+.PHONY: test
+test:
+	cabal test --test-show-details=direct
+
 .PHONY: fmt
 fmt:
 	ormolu app/**/*.hs -i

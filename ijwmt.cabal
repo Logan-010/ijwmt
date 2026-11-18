@@ -36,3 +36,28 @@ executable hyoh
 
   hs-source-dirs:   app
   default-language: Haskell2010
+
+test-suite ijwmt-test
+  import:           warnings
+  type:             exitcode-stdio-1.0
+  main-is:          Main.hs
+  hs-source-dirs:    test, app
+  other-modules:
+    TestSupport
+    BencodeSpec
+    TorrentSpec
+    WireSpec
+    Data.BitTorrent
+    Data.BitTorrent.Bencode
+    Data.BitTorrent.Wire
+
+  build-depends:
+    , base               ^>=4.20.2.0
+    , bytestring
+    , containers
+    , cryptohash-sha1
+    , cryptohash-sha256
+    , entropy
+    , text
+
+  default-language: Haskell2010
