@@ -50,18 +50,23 @@ test-suite ijwmt-test
     BencodeSpec
     Data.BitTorrent
     Data.BitTorrent.Bencode
+    Data.BitTorrent.Magnet
     Data.BitTorrent.Wire
+    MagnetSpec
     TestSupport
     TorrentSpec
     WireSpec
 
   build-depends:
     , base               ^>=4.20.2.0
+    , base16-bytestring
+    , base32
     , bytestring
     , containers
     , cryptohash-sha1
     , cryptohash-sha256
     , entropy
     , text
+    , url
 
   default-language: Haskell2010
