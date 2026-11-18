@@ -9,11 +9,11 @@ import System.IO (IOMode (ReadMode), openFile)
 main :: IO ()
 main = do
   args <- getArgs
-  file <- openFile (args !! 0) ReadMode
+  file <- openFile (head args) ReadMode
   content <- BS.hGetContents file
 
   case BE.decode content of
     Left e -> putStrLn e
     Right d -> case TR.decode d of
       Left e -> putStrLn e
-      Right v -> putStrLn $ show v
+      Right v -> print v

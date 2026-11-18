@@ -1,4 +1,4 @@
-module Data.Torrent.Wire (generatePeerId, handshake, Message (..), encodeMessage, decodeMessage) where
+module Data.Torrent.Wire (generatePeerId, ReservedFlag (..), generateReserved, handshake, Message (..), encodeMessage, decodeMessage) where
 
 import Data.Bits (Bits ((.|.)), shiftL)
 import Data.ByteString (ByteString)
@@ -11,6 +11,26 @@ import System.Entropy (getEntropy)
 
 generatePeerId :: IO ByteString
 generatePeerId = getEntropy 20
+
+data ReservedFlag
+  = DHT
+  | FastExtension
+  | ExtensionProtocol
+  | BitTorrentV2
+  deriving (Show, Eq, Enum, Bounded)
+
+generateReserved :: [ReservedFlag] -> ByteString
+generateReserved = BS.pack . foldl' setFlag (replicate 8 0)
+  where
+    setFlag bytes flag =
+      let (index, mask) = case flag of
+            DHT -> (7, 0x01)
+            FastExtension -> (7, 0x04)
+            ExtensionProtocol -> (5, 0x10)
+            BitTorrentV2 -> (7, 0x10)
+       in [ if i == index then b .|. mask else b
+          | (i, b) <- zip [0 :: Integer ..] bytes
+          ]
 
 handshake :: ByteString -> ByteString -> ByteString -> ByteString
 handshake reserved infoHash peerId

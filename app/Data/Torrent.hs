@@ -14,6 +14,7 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Data.Maybe (isNothing)
 
 data TorrentFile = TorrentFile
   { path :: [Text],
@@ -201,7 +202,7 @@ decode d = do
         _ -> required "length" values >>= integer
       when (fileLength < 0) (Left "File length must not be negative")
       link <- optional "symlink path" filePath values
-      when (symlink flags && link == Nothing) (Left "Missing symlink path")
+      when (symlink flags && isNothing link) (Left "Missing symlink path")
       checksum <- optional "sha1" sha1Bytes values
       root <- optional "pieces root" (hashBytes 32) values
       pure TorrentFile
@@ -265,7 +266,7 @@ decode d = do
         file <- parseFile components values
         case file of
           TorrentFile {length = n, piecesRoot = root, attributes = flags} ->
-            when (n > 0 && not (symlink flags) && root == Nothing)
+            when (n > 0 && not (symlink flags) && isNothing root)
               (Left "Missing pieces root")
         pure [file]
       Nothing -> concat <$> traverse (\(key, value) -> do
