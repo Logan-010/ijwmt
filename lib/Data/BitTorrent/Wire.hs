@@ -69,6 +69,12 @@ data Message
   | Request (Int, Int, Int)
   | Piece (Int, Int, ByteString)
   | Cancel (Int, Int, Int)
+  | Extended (Int, ByteString)
+  | SuggestPiece Int
+  | HaveAll
+  | HaveNone
+  | RejectRequest (Int, Int, Int)
+  | AllowedFast Int
   | HashRequest (ByteString, Int, Int, Int, Int)
   | Hashes (ByteString, Int, Int, Int, Int, [ByteString])
   | HashReject (ByteString, Int, Int, Int, Int)
@@ -99,6 +105,12 @@ encodeMessage msg = case msg of
   Request (i, b, l) -> BS.concat $ packInt 13 : packSingleInt 6 : packInt i : packInt b : [packInt l]
   Piece (i, b, c) -> let l = BS.length c in BS.concat $ packInt (9 + l) : packSingleInt 7 : packInt i : packInt b : [c]
   Cancel (i, b, l) -> BS.concat $ packInt 13 : packSingleInt 8 : packInt i : packInt b : [packInt l]
+  SuggestPiece i -> BS.concat $ packInt 5 : packSingleInt 13 : [packInt i]
+  HaveAll -> BS.concat $ packInt 1 : [packSingleInt 14]
+  HaveNone -> BS.concat $ packInt 1 : [packSingleInt 15]
+  RejectRequest (i, b, l) -> BS.concat $ packInt 13 : packSingleInt 16 : packInt i : packInt b : [packInt l]
+  AllowedFast i -> BS.concat $ packInt 5 : packSingleInt 17 : [packInt i]
+  Extended (i, d) -> BS.concat $ packInt (2 + BS.length d) : packSingleInt 20 : packSingleInt i : [d]
   HashRequest (p, b, i, l, pr)
     | BS.length p /= 32 ->
         error "Pieces root must be 32 bytes"
@@ -196,6 +208,36 @@ decodePayload code msg =
               ( unpackInt $ slice 0 4 msg,
                 unpackInt $ slice 4 4 msg,
                 unpackInt $ slice 8 4 msg
+              )
+    13
+      | BS.length msg /= 4 -> Left "Invalid message"
+      | otherwise -> Right $ SuggestPiece $ unpackInt msg
+    14
+      | BS.length msg /= 0 -> Left "Invalid message"
+      | otherwise -> Right HaveAll
+    15
+      | BS.length msg /= 0 -> Left "Invalid message"
+      | otherwise -> Right HaveNone
+    16
+      | BS.length msg /= 12 -> Left "Invalid message"
+      | otherwise ->
+          Right $
+            RejectRequest
+              ( unpackInt $ slice 0 4 msg,
+                unpackInt $ slice 4 4 msg,
+                unpackInt $ slice 8 4 msg
+              )
+    17
+      | BS.length msg /= 4 -> Left "Invalid message"
+      | otherwise ->
+          Right $ AllowedFast $ unpackInt $ slice 0 4 msg
+    20
+      | BS.length msg < 1 -> Left "Invalid message"
+      | otherwise ->
+          Right $
+            Extended
+              ( fromIntegral $ BS.head msg,
+                BS.tail msg
               )
     21
       | BS.length msg /= 48 -> Left "Invalid message"

@@ -61,11 +61,15 @@ tests =
                   BS.cons 6 (BS.replicate 11 0),
                   BS.cons 6 (BS.replicate 13 0),
                   BS.cons 7 (BS.replicate 7 0),
-                  BS.cons 8 (BS.replicate 11 0),
-                  BS.cons 8 (BS.replicate 13 0),
-                  BS.singleton 255
-                ]
-             ++ [BS.cons code (BS.replicate n 0) | code <- [21, 23], n <- [47, 49]]
+                   BS.cons 8 (BS.replicate 11 0),
+                   BS.cons 8 (BS.replicate 13 0),
+                   BS.singleton 20,
+                   BS.singleton 255
+                 ]
+              ++ [BS.cons code (BS.replicate n 0) | code <- [13, 17], n <- [0 .. 3] ++ [5]]
+              ++ [BS.cons code (BS.singleton 0) | code <- [14, 15]]
+              ++ [BS.cons 16 (BS.replicate n 0) | n <- [0 .. 11] ++ [13]]
+              ++ [BS.cons code (BS.replicate n 0) | code <- [21, 23], n <- [47, 49]]
              ++ [BS.cons 22 (BS.replicate n 0) | n <- [47, 49, 79, 81]]
        ]
     ++ [ ("wire: reject invalid hash encoder " ++ show msg, assertThrows (encodeMessage msg))
@@ -93,8 +97,21 @@ tests =
         (Request (1, 16384, 32768), frame (BS.singleton 6 <> word 1 <> word 16384 <> word 32768)),
         (Piece (2, 16384, "data"), frame (BS.singleton 7 <> word 2 <> word 16384 <> "data")),
         (Piece (0, 0, ""), frame (BS.singleton 7 <> word 0 <> word 0)),
-        (Cancel (1, 16384, 32768), frame (BS.singleton 8 <> word 1 <> word 16384 <> word 32768)),
-        (HashRequest (root, 1, 2, 3, 4), frame (BS.singleton 21 <> hashPayload)),
+         (Cancel (1, 16384, 32768), frame (BS.singleton 8 <> word 1 <> word 16384 <> word 32768)),
+         (SuggestPiece 0x01020304, BS.pack [0, 0, 0, 5, 13, 1, 2, 3, 4]),
+         (SuggestPiece 0, frame (BS.singleton 13 <> word 0)),
+         (HaveAll, BS.pack [0, 0, 0, 1, 14]),
+         (HaveNone, BS.pack [0, 0, 0, 1, 15]),
+         (RejectRequest (1, 16384, 32768), frame (BS.singleton 16 <> word 1 <> word 16384 <> word 32768)),
+         (RejectRequest (0, 0, 0), frame (BS.singleton 16 <> word 0 <> word 0 <> word 0)),
+         (AllowedFast 0x01020304, BS.pack [0, 0, 0, 5, 17, 1, 2, 3, 4]),
+         (AllowedFast 0, frame (BS.singleton 17 <> word 0)),
+         (Extended (0, "d1:md11:ut_metadatai1eee"), frame (BS.pack [20, 0] <> "d1:md11:ut_metadatai1eee")),
+         (Extended (0, ""), BS.pack [0, 0, 0, 2, 20, 0]),
+         (Extended (1, ""), BS.pack [0, 0, 0, 2, 20, 1]),
+         (Extended (1, "data"), BS.pack [0, 0, 0, 6, 20, 1, 100, 97, 116, 97]),
+         (Extended (255, BS.pack [0, 128, 255]), BS.pack [0, 0, 0, 5, 20, 255, 0, 128, 255]),
+         (HashRequest (root, 1, 2, 3, 4), frame (BS.singleton 21 <> hashPayload)),
         (Hashes (root, 1, 2, 3, 4, []), frame (BS.singleton 22 <> hashPayload)),
         (Hashes (root, 1, 2, 3, 4, [hash1, hash2]), frame (BS.singleton 22 <> hashPayload <> hash1 <> hash2)),
         (HashReject (root, 1, 2, 3, 4), frame (BS.singleton 23 <> hashPayload))
