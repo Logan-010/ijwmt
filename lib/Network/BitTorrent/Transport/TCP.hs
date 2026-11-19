@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Network.BitTorrent.Transport.TCP (TCP) where
+module Network.BitTorrent.Transport.TCP (TCP(..), newTcpSocket) where
 
 import Control.Monad (when)
 import qualified Data.ByteString as BS
@@ -28,6 +28,9 @@ recvExactly sock n = do
             (chunk : chunks)
 
 newtype TCP = TCP { inner :: Socket }
+
+newTcpSocket :: Socket -> TCP
+newTcpSocket sock = TCP sock
 
 instance PeerStream TCP where
   readBytes tcp = recvExactly $ inner tcp

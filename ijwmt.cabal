@@ -38,6 +38,7 @@ library
     Data.BitTorrent.Magnet
     Data.BitTorrent.Wire
     Network.BitTorrent
+    Network.BitTorrent.Socket
     Network.BitTorrent.Transport.MSE
     Network.BitTorrent.Transport.TCP
     Network.BitTorrent.Transport.UTP

@@ -1,5 +1,8 @@
 module Main (main) where
 
+import Network.BitTorrent.Socket (newTcp, newUdp)
+import qualified Network.BitTorrent.Transport.TCP as TCP
+import qualified Network.BitTorrent.Transport.UTP as UTP
 import qualified System.Args as AG
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
@@ -19,5 +22,8 @@ main = do
           if AG.version c
             then
               hPutStrLn stderr AG.versionStr
-            else
-              print c
+            else do
+              tcpSocket <- (newTcp $ AG.tcpAddr c) >>= pure . TCP.newTcpSocket
+              utpSocket <- (newUdp $ AG.utpAddr c) >>= pure . UTP.newUTPSocket
+
+              pure ()

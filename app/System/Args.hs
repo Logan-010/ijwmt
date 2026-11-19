@@ -13,13 +13,15 @@ data Args = Args
     version :: Bool,
     noTcp :: Bool,
     tcpAddr :: String,
+    noUtp :: Bool,
+    utpAddr :: String,
     files :: [Torrent],
     magnets :: [Magnet]
   }
   deriving (Show, Eq)
 
 defaultArgs :: Args
-defaultArgs = Args False False False "[::]:8877" [] []
+defaultArgs = Args False False False "[::]:8877" False "[::]:8877" [] []
 
 helpStr :: String
 helpStr =
@@ -33,6 +35,8 @@ helpStr =
       "  -v, --version         Show version information",
       "  -t, --noTcp           Disable TCP connections",
       "  -T, --tcpAddr ADDR    Set TCP listen address (default: [::]:8877)",
+      "  -u, --noUtp           Disable uTP connections",
+      "  -U, --utpAddr ADDR    Set uTP listen address (default: [::]:8877)",
       "  -f, --file PATH       Load a torrent file (can be repeated)",
       "",
       "Arguments:",
@@ -61,6 +65,10 @@ parse args =
         | h `elem` ["-T", "--tcpAddr"] -> case uncons t of
             Just (he, ta) -> parse' ta $ p {tcpAddr = he}
             Nothing -> pure $ Left "Missing TCP listen address"
+        | h `elem` ["-u", "--noUtp"] -> parse' t $ p {noUtp = True}
+        | h `elem` ["-U", "--utpAddr"] -> case uncons t of
+            Just (he, ta) -> parse' ta $ p {utpAddr = he}
+            Nothing -> pure $ Left "Missing uTP listen address"
         | h `elem` ["-f", "--file"] -> case uncons t of
             Just (he, ta) ->
               BS.readFile he >>= \c ->
