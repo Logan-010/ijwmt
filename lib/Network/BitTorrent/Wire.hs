@@ -16,7 +16,7 @@ import Network.BitTorrent (PeerStream(..))
 maxMessageLength :: Int
 maxMessageLength = 2 * 1024 * 1024
 
-recvMessage :: PeerStream -> IO Message
+recvMessage :: PeerStream a => a -> IO Message
 recvMessage stream = do
   lenBytes <- readBytes stream 4
 
@@ -31,6 +31,6 @@ recvMessage stream = do
     Left e -> fail e
     Right msg -> pure msg
 
-sendMessage :: PeerStream -> Message -> IO ()
+sendMessage :: PeerStream a => a -> Message -> IO ()
 sendMessage stream msg =
   writeBytes stream (encodeMessage msg)

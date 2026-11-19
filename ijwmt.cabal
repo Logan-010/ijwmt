@@ -40,6 +40,7 @@ library
     Network.BitTorrent
     Network.BitTorrent.Transport.MSE
     Network.BitTorrent.Transport.TCP
+    Network.BitTorrent.Transport.UTP
     Network.BitTorrent.Wire
 
   -- other-extensions:
@@ -69,6 +70,7 @@ test-suite ijwmt-test
     MagnetSpec
     TestSupport
     TorrentSpec
+    UTPSpec
     WireSpec
 
   build-depends:
@@ -78,6 +80,7 @@ test-suite ijwmt-test
     , cryptohash-sha1
     , cryptohash-sha256
     , ijwmt
+    , network
     , url
 
   default-language: Haskell2010

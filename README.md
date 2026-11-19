@@ -2,6 +2,7 @@
 
 <!--toc:start-->
 - [IJWMT (I Just Want My Torrent)](#ijwmt-i-just-want-my-torrent)
+  - [uTP transport](#utp-transport)
   - [TO-DO](#to-do)
     - [Peer Transports](#peer-transports)
     - [Peer Discovery](#peer-discovery)
@@ -17,7 +18,7 @@ Purely functional minimalist BitTorrent client in your terminal
 
 - [x] Unencrypted TCP
 - [ ] MSE/PE encryption
-- [ ] uTP over UDP (BEP 29)
+- [ ] uTP
 - [ ] WebRTC DataChannels
 
 ### Peer Discovery
