@@ -5,7 +5,7 @@ synopsis:      I just want my torrent - purely functional torrenting
 description:
   I just want my torrent - purely functional minimalist bittorrent client in your terminal
 
-homepage:      https://github.com/Logan-010/hyoh
+homepage:      https://github.com/Logan-010/ijwmt
 license:       MIT
 license-file:  LICENSE
 author:        Logan Briesemeister
@@ -43,7 +43,7 @@ library
     Network.BitTorrent.Transport.UTP
     Network.BitTorrent.Wire
 
-  -- other-extensions:
+  other-modules:     Network.BitTorrent.Transport.UTP.Packet
   build-depends:
     , base               ^>=4.20.2.0
     , base16-bytestring
@@ -54,6 +54,7 @@ library
     , cryptohash-sha256
     , entropy
     , network
+    , stm
     , text
     , url
 
