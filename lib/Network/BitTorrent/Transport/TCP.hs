@@ -1,9 +1,10 @@
-module Network.BitTorrent.Transport.TCP where
+{-# LANGUAGE TypeSynonymInstances #-}
+
+module Network.BitTorrent.Transport.TCP (TCP) where
 
 import Control.Monad (when)
 import qualified Data.ByteString as BS
-
-import Network.BitTorrent (PeerStream(..))
+import Network.BitTorrent (PeerStream (..))
 import Network.Socket (Socket)
 import qualified Network.Socket.ByteString as NSB
 
@@ -16,7 +17,6 @@ recvExactly sock n = do
   where
     go 0 chunks =
       pure (BS.concat (reverse chunks))
-
     go remaining chunks = do
       chunk <- NSB.recv sock remaining
 
@@ -27,9 +27,8 @@ recvExactly sock n = do
             (remaining - BS.length chunk)
             (chunk : chunks)
 
-tcpStream :: Socket -> PeerStream
-tcpStream sock =
-  PeerStream
-    { readBytes  = recvExactly sock
-    , writeBytes = NSB.sendAll sock
-    }
+newtype TCP = TCP { inner :: Socket }
+
+instance PeerStream TCP where
+  readBytes tcp = recvExactly $ inner tcp
+  writeBytes tcp = NSB.sendAll $ inner tcp

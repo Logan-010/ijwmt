@@ -1,9 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.BitTorrent.Transport.MSE (mseStream, IncomingProtocol (..), detectProtocol) where
+module Network.BitTorrent.Transport.MSE (MSE, IncomingProtocol (..), detectProtocol, EncryptionPolicy (..), EncryptionMode (..)) where
 
 import qualified Data.ByteString as BS
-import Network.BitTorrent (PeerStream (readBytes))
+import Network.BitTorrent (PeerStream (readBytes, writeBytes))
+
+data EncryptionPolicy
+  = PlaintextOnly
+  | PreferPlaintext
+  | PreferEncrypted
+  | RequireEncrypted
+  deriving (Eq, Show)
+
+data EncryptionMode
+  = Plaintext
+  | RC4Encrypted
+  deriving (Eq, Show)
 
 btPrefix :: BS.ByteString
 btPrefix = BS.cons 19 "BitTorrent protocol"
@@ -14,7 +26,8 @@ data IncomingProtocol
   deriving (Eq, Show)
 
 detectProtocol ::
-  PeerStream ->
+  (PeerStream a) =>
+  a ->
   IO
     (IncomingProtocol, BS.ByteString)
 detectProtocol stream = do
@@ -27,5 +40,8 @@ detectProtocol stream = do
 
   pure (protocol, prefix)
 
-mseStream :: PeerStream -> PeerStream
-mseStream stream = error "todo"
+newtype MSE a = MSE a
+
+instance PeerStream a => PeerStream (MSE a) where
+  readBytes mse = error "todo"
+  writeBytes mse = error "todo"
