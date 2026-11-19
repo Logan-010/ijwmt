@@ -21,8 +21,10 @@ executable ijwmt
   main-is:          Main.hs
 
   -- other-extensions:
+  other-modules:    System.Args
   build-depends:
-    , base               ^>=4.20.2.0
+    , base        ^>=4.20.2.0
+    , bytestring
     , ijwmt
 
   hs-source-dirs:   app
@@ -36,9 +38,9 @@ library
     Data.BitTorrent.Magnet
     Data.BitTorrent.Wire
     Network.BitTorrent
-    Network.BitTorrent.Wire
-    Network.BitTorrent.Transport.TCP
     Network.BitTorrent.Transport.MSE
+    Network.BitTorrent.Transport.TCP
+    Network.BitTorrent.Wire
 
   -- other-extensions:
   build-depends:
@@ -50,9 +52,9 @@ library
     , cryptohash-sha1
     , cryptohash-sha256
     , entropy
+    , network
     , text
     , url
-    , network
 
   hs-source-dirs:   lib
   default-language: Haskell2010
@@ -71,11 +73,11 @@ test-suite ijwmt-test
 
   build-depends:
     , base               ^>=4.20.2.0
-    , ijwmt
     , bytestring
     , containers
     , cryptohash-sha1
     , cryptohash-sha256
+    , ijwmt
     , url
 
   default-language: Haskell2010
