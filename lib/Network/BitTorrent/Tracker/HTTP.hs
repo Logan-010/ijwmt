@@ -32,7 +32,7 @@ data Event = Started | Completed | Stopped deriving (Show, Eq)
 encode :: URL -> ByteString -> ByteString -> PortNumber -> Int -> Int -> Int -> Event -> Bool -> Int -> URL
 encode base infoHash peerId port uploaded downloaded left event compact numwant =
   let params =
-        [ ("info_hash", BS.unpack $ urlEncode False infoHash),
+        [ ("info_hash", BS.unpack $ urlEncode False $ BS.take 20 infoHash),
           ("peer_id", BS.unpack $ urlEncode False peerId),
           ("port", show port),
           ("uploaded", show uploaded),

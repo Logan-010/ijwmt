@@ -39,6 +39,7 @@ library
     Data.BitTorrent.Wire
     Network.BitTorrent
     Network.BitTorrent.Socket
+    Network.BitTorrent.Tracker
     Network.BitTorrent.Tracker.HTTP
     Network.BitTorrent.Transport.MSE
     Network.BitTorrent.Transport.TCP
