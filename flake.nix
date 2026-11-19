@@ -36,7 +36,15 @@
           };
 
           ijwmt = pkgs.haskell.lib.dontCheck (
-            hs.callCabal2nix "ijwmt" ./. { }
+            (hs.callCabal2nix "ijwmt" ./. { }).overrideAttrs (old: {
+              buildInputs = (old.buildInputs or [ ]) ++ [
+                pkgs.zlib
+              ];
+
+              nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+                pkgs.pkg-config
+              ];
+            })
           );
         in
         {
@@ -52,6 +60,10 @@
               hs.cabal-fmt
               hlint
               hs.ghcid
+
+              # Native dependencies
+              zlib
+              pkg-config
 
               # Development
               git

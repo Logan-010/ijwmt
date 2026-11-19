@@ -23,7 +23,7 @@ main = do
             then
               hPutStrLn stderr AG.versionStr
             else do
-              tcpSocket <- (newTcp $ AG.tcpAddr c) >>= pure . TCP.newTcpSocket
-              utpSocket <- (newUdp $ AG.utpAddr c) >>= pure . UTP.newUTPSocket
+              tcpSocket <- TCP.newTcpSocket <$> newTcp (AG.tcpAddr c)
+              utpSocket <- UTP.newUTPSocket <$> newUdp (AG.utpAddr c)
 
               pure ()
