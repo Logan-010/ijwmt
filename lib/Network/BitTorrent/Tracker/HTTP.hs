@@ -1,5 +1,6 @@
 module Network.BitTorrent.Tracker.HTTP where
 
+import qualified Data.BitTorrent.Bencode as BE
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -9,6 +10,7 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (urlEncode)
 import Network.Socket (PortNumber)
 import Network.URL (URL (url_params), exportURL)
+import Network.BitTorrent.Tracker (TrackerResponse)
 
 {-
   info_hash	Percent-encoded 20 bytes	Required
@@ -44,9 +46,11 @@ encode base infoHash peerId port uploaded downloaded left event compact numwant 
         ]
    in base {url_params = params}
 
-announce :: URL -> IO ByteString
+announce :: URL -> IO TrackerResponse
 announce url = do
   manager <- newManager tlsManagerSettings
   req <- parseRequest $ exportURL url
   res <- httpLbs req manager
-  pure $ LBS.toStrict $ responseBody res
+  case BE.decode $ LBS.toStrict $ responseBody res of
+    Left e -> ioError $ userError e
+    Right b -> error "todo"
