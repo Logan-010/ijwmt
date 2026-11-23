@@ -1,43 +1,18 @@
-module Network.BitTorrent.Tracker.HTTP where
+module Network.BitTorrent.Tracker.HTTP (encode, decode, announce, Event (..)) where
 
 import qualified Data.BitTorrent.Bencode as BE
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as Bytes
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Char (toLower)
 import qualified Data.Map as Map
-import Data.Word (Word16)
 import Network.HTTP.Client (httpLbs, newManager, parseRequest, responseBody)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (urlEncode)
-import Network.Socket (AddrInfo (..), AddrInfoFlag (..), PortNumber, SockAddr (..), SocketType (Stream), defaultHints, getAddrInfo, tupleToHostAddress, tupleToHostAddress6)
+import Network.Socket (AddrInfo (..), AddrInfoFlag (..), PortNumber, SocketType (Stream), defaultHints, getAddrInfo)
 import Network.URL (URL (url_params), exportURL)
-import Network.BitTorrent.Tracker (Peer (Peer), TrackerResponse (TrackerResponse))
-
-data Event = Started | Completed | Stopped deriving (Show, Eq)
-
-encode :: URL -> ByteString -> ByteString -> PortNumber -> Int -> Int -> Int -> Event -> Bool -> Int -> URL
-encode base infoHash peerId port uploaded downloaded left event compact numwant =
-  let params =
-        [ ("info_hash", BS.unpack $ urlEncode False $ BS.take 20 infoHash),
-          ("peer_id", BS.unpack $ urlEncode False peerId),
-          ("port", show port),
-          ("uploaded", show uploaded),
-          ("downloaded", show downloaded),
-          ("left", show left),
-          ("event", map toLower $ show event),
-          ("compact", if compact then "1" else "0"),
-          ("numwant", show numwant)
-        ]
-   in base {url_params = params}
-
-announce :: URL -> IO TrackerResponse
-announce url = do
-  manager <- newManager tlsManagerSettings
-  req <- parseRequest $ exportURL url
-  res <- httpLbs req manager
-  decode $ LBS.toStrict $ responseBody res
+import Network.BitTorrent.Tracker.Types (Event (..), Peer (Peer), TrackerResponse (TrackerResponse))
+import Network.BitTorrent.Tracker.Util (failure, compactPeers, compactIPv4, compactIPv6)
 
 decode :: ByteString -> IO TrackerResponse
 decode body = do
@@ -61,7 +36,6 @@ decode body = do
     Just _ -> failure "Invalid peers6"
   pure (TrackerResponse announceInterval seeders leechers (ipv4Peers ++ ipv6Peers))
   where
-    failure message = ioError (userError ("Invalid tracker response: " ++ message))
 
     dictionary (BE.BDict fields) = pure fields
     dictionary _ = failure "Expected dictionary"
@@ -94,24 +68,24 @@ decode body = do
     string _ (BE.BString bytes) = pure bytes
     string label _ = failure ("Invalid " ++ label)
 
-    compactPeers size address bytes
-      | Bytes.length bytes `mod` size /= 0 = failure "Invalid compact peer list length"
-      | otherwise = pure (go bytes)
-      where
-        go remaining
-          | Bytes.null remaining = []
-          | otherwise =
-              let (entry, rest) = Bytes.splitAt size remaining
-               in Peer Nothing (address entry) : go rest
+encode :: URL -> ByteString -> ByteString -> PortNumber -> Int -> Int -> Int -> Event -> Bool -> Int -> URL
+encode base infoHash peerId port uploaded downloaded left event compact numwant =
+  let params =
+        [ ("info_hash", BS.unpack $ urlEncode False $ BS.take 20 infoHash),
+          ("peer_id", BS.unpack $ urlEncode False peerId),
+          ("port", show port),
+          ("uploaded", show uploaded),
+          ("downloaded", show downloaded),
+          ("left", show left),
+          ("event", map toLower $ show event),
+          ("compact", if compact then "1" else "0"),
+          ("numwant", show numwant)
+        ]
+   in base {url_params = params}
 
-    compactIPv4 bytes =
-      SockAddrInet (fromIntegral (word16 bytes 4)) $
-        tupleToHostAddress (Bytes.index bytes 0, Bytes.index bytes 1, Bytes.index bytes 2, Bytes.index bytes 3)
-
-    compactIPv6 bytes =
-      SockAddrInet6 (fromIntegral (word16 bytes 16)) 0
-        (tupleToHostAddress6 (word16 bytes 0, word16 bytes 2, word16 bytes 4, word16 bytes 6, word16 bytes 8, word16 bytes 10, word16 bytes 12, word16 bytes 14))
-        0
-
-    word16 :: ByteString -> Int -> Word16
-    word16 bytes offset = fromIntegral (Bytes.index bytes offset) * 256 + fromIntegral (Bytes.index bytes (offset + 1))
+announce :: URL -> IO TrackerResponse
+announce url = do
+  manager <- newManager tlsManagerSettings
+  req <- parseRequest $ exportURL url
+  res <- httpLbs req manager
+  decode $ LBS.toStrict $ responseBody res

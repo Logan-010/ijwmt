@@ -40,13 +40,18 @@ library
     Network.BitTorrent
     Network.BitTorrent.Socket
     Network.BitTorrent.Tracker
-    Network.BitTorrent.Tracker.HTTP
     Network.BitTorrent.Transport.MSE
     Network.BitTorrent.Transport.TCP
     Network.BitTorrent.Transport.UTP
     Network.BitTorrent.Wire
 
-  other-modules:    Network.BitTorrent.Transport.UTP.Packet
+  other-modules:
+    Network.BitTorrent.Tracker.HTTP
+    Network.BitTorrent.Tracker.Types
+    Network.BitTorrent.Tracker.UDP
+    Network.BitTorrent.Tracker.Util
+    Network.BitTorrent.Transport.UTP.Packet
+
   build-depends:
     , base               ^>=4.20.2.0
     , base16-bytestring
@@ -57,13 +62,13 @@ library
     , cryptohash-sha256
     , crypton
     , entropy
+    , http-client
+    , http-client-tls
+    , http-types
     , network
     , stm
     , text
     , url
-    , http-client
-    , http-client-tls
-    , http-types
 
   hs-source-dirs:   lib
   default-language: Haskell2010
@@ -79,7 +84,6 @@ test-suite ijwmt-test
     MSESpec
     TestSupport
     TorrentSpec
-    TrackerHTTPSpec
     UTPSpec
     WireSpec
 
@@ -91,6 +95,32 @@ test-suite ijwmt-test
     , cryptohash-sha256
     , crypton
     , ijwmt
+    , network
+    , url
+
+  default-language: Haskell2010
+
+test-suite tracker-http-test
+  import:           warnings
+  type:             exitcode-stdio-1.0
+  main-is:          TrackerHTTPMain.hs
+  hs-source-dirs:   test lib
+  other-modules:
+    Data.BitTorrent.Bencode
+    Network.BitTorrent.Tracker
+    Network.BitTorrent.Tracker.HTTP
+    Network.BitTorrent.Tracker.Types
+    Network.BitTorrent.Tracker.Util
+    TestSupport
+    TrackerHTTPSpec
+
+  build-depends:
+    , base             ^>=4.20.2.0
+    , bytestring
+    , containers
+    , http-client
+    , http-client-tls
+    , http-types
     , network
     , url
 
