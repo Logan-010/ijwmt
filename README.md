@@ -16,7 +16,7 @@ Purely functional minimalist BitTorrent client in your terminal
 ### Peer Transports
 
 - [x] Unencrypted TCP
-- [ ] MSE/PE encryption
+- [x] MSE/PE encryption
 - [x] uTP over UDP (BEP 29)
 - [ ] WebRTC DataChannels
 

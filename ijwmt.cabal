@@ -55,6 +55,7 @@ library
     , containers
     , cryptohash-sha1
     , cryptohash-sha256
+    , crypton
     , entropy
     , network
     , stm
@@ -75,6 +76,7 @@ test-suite ijwmt-test
   other-modules:
     BencodeSpec
     MagnetSpec
+    MSESpec
     TestSupport
     TorrentSpec
     TrackerHTTPSpec
@@ -87,6 +89,7 @@ test-suite ijwmt-test
     , containers
     , cryptohash-sha1
     , cryptohash-sha256
+    , crypton
     , ijwmt
     , network
     , url
