@@ -6,13 +6,12 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Char (toLower)
 import qualified Data.Map as Map
-import Network.HTTP.Client (httpLbs, newManager, parseRequest, responseBody)
-import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.BitTorrent.Tracker.Types (Event (..), Peer (Peer), TrackerResponse (TrackerResponse))
+import Network.BitTorrent.Tracker.Util (compactIPv4, compactIPv6, compactPeers, failure)
+import Network.HTTP.Client (Manager, httpLbs, parseRequest, responseBody)
 import Network.HTTP.Types (urlEncode)
 import Network.Socket (AddrInfo (..), AddrInfoFlag (..), PortNumber, SocketType (Stream), defaultHints, getAddrInfo)
 import Network.URL (URL (url_params), exportURL)
-import Network.BitTorrent.Tracker.Types (Event (..), Peer (Peer), TrackerResponse (TrackerResponse))
-import Network.BitTorrent.Tracker.Util (failure, compactPeers, compactIPv4, compactIPv6)
 
 decode :: ByteString -> IO TrackerResponse
 decode body = do
@@ -36,7 +35,6 @@ decode body = do
     Just _ -> failure "Invalid peers6"
   pure (TrackerResponse announceInterval seeders leechers (ipv4Peers ++ ipv6Peers))
   where
-
     dictionary (BE.BDict fields) = pure fields
     dictionary _ = failure "Expected dictionary"
 
@@ -83,9 +81,8 @@ encode base infoHash peerId port uploaded downloaded left event compact numwant 
         ]
    in base {url_params = params}
 
-announce :: URL -> IO TrackerResponse
-announce url = do
-  manager <- newManager tlsManagerSettings
+announce :: Manager -> URL -> IO TrackerResponse
+announce manager url = do
   req <- parseRequest $ exportURL url
   res <- httpLbs req manager
   decode $ LBS.toStrict $ responseBody res

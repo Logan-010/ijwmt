@@ -43,6 +43,8 @@ library
     Network.BitTorrent.Transport.MSE
     Network.BitTorrent.Transport.TCP
     Network.BitTorrent.Transport.UTP
+    Network.BitTorrent.Util
+    Network.BitTorrent.WebSeed
     Network.BitTorrent.Wire
 
   other-modules:
