@@ -88,7 +88,7 @@ packInt n =
 packSingleInt :: Int -> ByteString
 packSingleInt n = BS.singleton (fromIntegral n)
 
-unpackInt :: BS.ByteString -> Int
+unpackInt :: ByteString -> Int
 unpackInt =
   BS.foldl' (\acc b -> (acc `shiftL` 8) .|. fromIntegral b) 0
     . BS.take 4

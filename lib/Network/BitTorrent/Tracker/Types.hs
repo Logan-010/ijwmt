@@ -1,3 +1,5 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+
 module Network.BitTorrent.Tracker.Types (Peer (..), TrackerResponse (..), Event (..)) where
 
 import Data.ByteString (ByteString)
@@ -17,4 +19,4 @@ data TrackerResponse = TrackerResponse
   }
   deriving (Show, Eq)
 
-data Event = Started | Completed | Stopped deriving (Show, Eq)
+data Event = None | Completed | Started | Stopped deriving (Show, Eq)

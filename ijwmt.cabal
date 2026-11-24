@@ -77,51 +77,50 @@ test-suite ijwmt-test
   import:           warnings
   type:             exitcode-stdio-1.0
   main-is:          Main.hs
-  hs-source-dirs:   test
+  hs-source-dirs:   test lib
   other-modules:
     BencodeSpec
+    Data.BitTorrent
+    Data.BitTorrent.Bencode
+    Data.BitTorrent.Magnet
+    Data.BitTorrent.Wire
     MagnetSpec
     MSESpec
+    Network.BitTorrent
+    Network.BitTorrent.Socket
+    Network.BitTorrent.Tracker
+    Network.BitTorrent.Tracker.HTTP
+    Network.BitTorrent.Tracker.Types
+    Network.BitTorrent.Tracker.UDP
+    Network.BitTorrent.Tracker.Util
+    Network.BitTorrent.Transport.MSE
+    Network.BitTorrent.Transport.TCP
+    Network.BitTorrent.Transport.UTP
+    Network.BitTorrent.Transport.UTP.Packet
+    Network.BitTorrent.Wire
     TestSupport
     TorrentSpec
+    TrackerHTTPSpec
+    TrackerUDPSpec
     UTPSpec
     WireSpec
 
   build-depends:
     , base               ^>=4.20.2.0
+    , base16-bytestring
+    , base32
     , bytestring
     , containers
     , cryptohash-sha1
     , cryptohash-sha256
     , crypton
-    , ijwmt
-    , network
-    , url
-
-  default-language: Haskell2010
-
-test-suite tracker-http-test
-  import:           warnings
-  type:             exitcode-stdio-1.0
-  main-is:          TrackerHTTPMain.hs
-  hs-source-dirs:   test lib
-  other-modules:
-    Data.BitTorrent.Bencode
-    Network.BitTorrent.Tracker
-    Network.BitTorrent.Tracker.HTTP
-    Network.BitTorrent.Tracker.Types
-    Network.BitTorrent.Tracker.Util
-    TestSupport
-    TrackerHTTPSpec
-
-  build-depends:
-    , base             ^>=4.20.2.0
-    , bytestring
-    , containers
+    , entropy
     , http-client
     , http-client-tls
     , http-types
     , network
+    , stm
+    , text
     , url
 
   default-language: Haskell2010
