@@ -34,7 +34,7 @@ Purely functional minimalist BitTorrent client in your terminal
 - [x] HTTPS trackers
 - [x] UDP trackers (BEP 15)
 - [x] Compact IPv4 and IPv6 peer lists
-- [ ] Multi-tracker tiers (BEP 12)
+- [x] Multi-tracker tiers (BEP 12)
 - [ ] WS/WSS trackers
 
 ### BitTorrent Protocols and Extensions
