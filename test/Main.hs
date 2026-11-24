@@ -1,6 +1,7 @@
 module Main (main) where
 
 import qualified BencodeSpec
+import qualified ExtensionSpec
 import qualified MSESpec
 import qualified MagnetSpec
 import TestSupport (runTests)
@@ -11,4 +12,4 @@ import qualified UTPSpec
 import qualified WireSpec
 
 main :: IO ()
-main = runTests (BencodeSpec.tests ++ MagnetSpec.tests ++ MSESpec.tests ++ TorrentSpec.tests ++ WireSpec.tests ++ UTPSpec.tests ++ TrackerHTTPSpec.tests ++ TrackerUDPSpec.tests)
+main = runTests (BencodeSpec.tests ++ ExtensionSpec.tests ++ MagnetSpec.tests ++ MSESpec.tests ++ TorrentSpec.tests ++ WireSpec.tests ++ UTPSpec.tests ++ TrackerHTTPSpec.tests ++ TrackerUDPSpec.tests)

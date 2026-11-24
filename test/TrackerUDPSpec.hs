@@ -12,6 +12,7 @@ import Data.Word (Word32)
 import qualified Network.BitTorrent.Tracker as Tracker
 import Network.BitTorrent.Tracker.Types (Event (..), Peer (..), TrackerResponse (TrackerResponse))
 import qualified Network.BitTorrent.Tracker.UDP as UDP
+import Network.BitTorrent.Util (initManager)
 import Network.Socket
 import Network.Socket.ByteString (recvFrom, sendTo)
 import Network.URL (Host (..), Protocol (..), URL (..), URLType (..))
@@ -35,8 +36,9 @@ tests =
   where
     successful family peers expected = withTracker family (\tid -> response tid peers) $ \req -> do
       -- Exercise the public dispatcher too.
+      manager <- initManager
       let url = URL (Absolute (UDP.host req)) "announce" []
-      case Tracker.new url (UDP.infoHash req) (UDP.peer req) "unused" 51413 3 1 2 Started True (-1) of
+      case Tracker.new manager url (UDP.infoHash req) (UDP.peer req) "unused" 51413 3 1 2 Started True (-1) of
         Nothing -> fail "UDP URL rejected"
         Just tracker -> Tracker.announce tracker >>= assertEqual (TrackerResponse 1800 (Just 7) (Just 11) expected)
     rejected reply = withTracker AF_INET reply $ \req -> do

@@ -43,7 +43,7 @@ Purely functional minimalist BitTorrent client in your terminal
 - [x] Extension protocol (BEP 10)
 - [x] BitTorrent v2 and hybrid (BEP 52)
 - [x] Fast extension (BEP 6)
-- [ ] Magnet links / ut_metadata (BEP 9)
+- [x] Magnet links / ut_metadata (BEP 9)
 - [x] Web seeds (BEP 19)
 - [ ] NAT-PMP / PCP / UPnP IGD
 - [ ] Hole punching (BEP 55)

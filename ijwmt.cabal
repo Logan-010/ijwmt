@@ -35,6 +35,7 @@ library
   exposed-modules:
     Data.BitTorrent
     Data.BitTorrent.Bencode
+    Data.BitTorrent.Extension
     Data.BitTorrent.Magnet
     Data.BitTorrent.Wire
     Network.BitTorrent
@@ -84,8 +85,10 @@ test-suite ijwmt-test
     BencodeSpec
     Data.BitTorrent
     Data.BitTorrent.Bencode
+    Data.BitTorrent.Extension
     Data.BitTorrent.Magnet
     Data.BitTorrent.Wire
+    ExtensionSpec
     MagnetSpec
     MSESpec
     Network.BitTorrent
@@ -99,6 +102,7 @@ test-suite ijwmt-test
     Network.BitTorrent.Transport.TCP
     Network.BitTorrent.Transport.UTP
     Network.BitTorrent.Transport.UTP.Packet
+    Network.BitTorrent.Util
     Network.BitTorrent.Wire
     TestSupport
     TorrentSpec

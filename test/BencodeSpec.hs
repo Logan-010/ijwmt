@@ -2,7 +2,7 @@
 
 module BencodeSpec (tests) where
 
-import Data.BitTorrent.Bencode
+import Data.BitTorrent.Bencode hiding (value)
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import TestSupport
@@ -12,13 +12,35 @@ tests =
   [ ("bencode: decode " ++ show raw, assertEqual (Right value) (decode raw))
   | (raw, value) <- examples
   ]
+    ++ [ ("bencode: decodeOne " ++ show raw, assertEqual (Right (DecodeResult value (BS.length raw))) (decodeOne raw))
+       | (raw, value) <- examples
+       ]
+    ++ [ ("bencode: decodeOne with trailing bytes " ++ show (raw, suffix), assertEqual (Right (DecodeResult value (BS.length raw))) (decodeOne (raw <> suffix)))
+       | (raw, value) <- examples,
+         suffix <- ["junk", "i42e", BS.pack [0, 128, 255]]
+       ]
+    ++ [ ("bencode: decode concatenated values", do
+            let first = encode (BInt 42)
+                second = encode (BString "spam")
+                input = first <> second
+            assertEqual (Right (DecodeResult (BString "spam") (BS.length second))) $ do
+              result <- decodeOne input
+              decodeOne (BS.drop (bytesConsumed result) input)
+         )
+       ]
     ++ [ ("bencode: encode " ++ show value, assertEqual raw (encode value))
        | (raw, value) <- examples
        ]
     ++ [ ("bencode: round trip " ++ show value, assertEqual (Right value) (decode (encode value)))
        | value <- map snd examples ++ [BInt (10 ^ (100 :: Int)), BInt (negate (10 ^ (100 :: Int)))]
        ]
-    ++ [ ("bencode: reject " ++ show raw, assertLeft (decode raw))
+    ++ [ ("bencode: reject trailing data " ++ show raw, assertLeft (decode raw))
+       | raw <- ["i1ejunk", "0:0:", "lee"]
+       ]
+    ++ [ ("bencode: reject " ++ show raw, do
+            assertLeft (decodeOne raw)
+            assertLeft (decode raw)
+         )
        | raw <-
            [ "",
              "x",
@@ -40,10 +62,7 @@ tests =
              "li1e",
              "d",
              "d1:a",
-             "di1ei2ee",
-             "i1ejunk",
-             "0:0:",
-             "lee"
+              "di1ei2ee"
            ]
        ]
   where

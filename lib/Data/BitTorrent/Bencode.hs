@@ -1,4 +1,4 @@
-module Data.BitTorrent.Bencode (decode, encode, BencodeValue (..)) where
+module Data.BitTorrent.Bencode (decodeOne, decode, encode, DecodeResult (..), BencodeValue (..)) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -11,6 +11,12 @@ data BencodeValue
   | BInt Integer
   | BList [BencodeValue]
   | BDict (Map.Map ByteString BencodeValue)
+  deriving (Show, Eq)
+
+data DecodeResult = DecodeResult
+  { value :: BencodeValue,
+    bytesConsumed :: Int
+  }
   deriving (Show, Eq)
 
 parseString :: ByteString -> Either String (ByteString, ByteString)
@@ -51,8 +57,8 @@ parseList = inner []
       | BS.null s = Left "Unterminated list"
       | BS.head s == 'e' = Right (reverse acc, BS.tail s)
       | otherwise = do
-          (value, rest) <- parseItem s
-          inner (value : acc) rest
+          (item, rest) <- parseItem s
+          inner (item : acc) rest
 
 parseMap :: ByteString -> Either String (Map.Map ByteString BencodeValue, ByteString)
 parseMap = inner Map.empty
@@ -62,15 +68,15 @@ parseMap = inner Map.empty
       | BS.head s == 'e' = Right (acc, BS.tail s)
       | otherwise = do
           (key, rest) <- parseString s
-          (value, remaining) <- parseItem rest
-          inner (Map.insert key value acc) remaining
+          (item, remaining) <- parseItem rest
+          inner (Map.insert key item acc) remaining
 
 parseItem :: ByteString -> Either String (BencodeValue, ByteString)
 parseItem d
   | BS.null d = Left "Unexpected end of input"
   | isDigit (BS.head d) = do
-      (value, rest) <- parseString d
-      Right (BString value, rest)
+      (str, rest) <- parseString d
+      Right (BString str, rest)
   | otherwise =
       case BS.head d of
         'd' -> do
@@ -84,15 +90,20 @@ parseItem d
             Nothing -> Left "Invalid integer"
             Just endIndex -> do
               let len = endIndex + 1
-              value <- parseInt (BS.take len d)
-              Right (BInt value, BS.drop len d)
+              number <- parseInt (BS.take len d)
+              Right (BInt number, BS.drop len d)
         _ -> Left "Invalid encoded value"
+
+decodeOne :: ByteString -> Either String DecodeResult
+decodeOne d = do
+  (item, rest) <- parseItem d
+  Right (DecodeResult item (BS.length d - BS.length rest))
 
 decode :: ByteString -> Either String BencodeValue
 decode d = do
-  (value, rest) <- parseItem d
-  if BS.null rest
-    then Right value
+  result <- decodeOne d
+  if bytesConsumed result == BS.length d
+    then Right (value result)
     else Left "Trailing data after encoded value"
 
 encode :: BencodeValue -> ByteString
