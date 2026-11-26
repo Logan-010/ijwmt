@@ -2,6 +2,7 @@ module Network.BitTorrent.Transport.UTP
   ( UTP,
     UTPSocket,
     newUTPSocket,
+    newUTP,
     closeUTPSocket,
     connectUTP,
     acceptUTP,
@@ -221,6 +222,16 @@ newStream manager peer outgoingId incomingId syn state = do
   writer <- newMVar ()
   pure (UTP manager peer outgoingId incomingId syn cell reader writer)
 
+-- | Create a handle for connecting or accepting on a shared socket. This
+-- handle is not a connected stream; use the stream returned by 'connectUTP'
+-- or 'acceptUTP' for reads and writes.
+newUTP :: UTPSocket -> IO UTP
+newUTP manager = do
+  now <- microseconds
+  local <- NS.getSocketName (socket manager)
+  newStream manager local 0 0 Nothing
+    (newConnection now (Failed "uTP handle is not connected") 0 0 0 0)
+
 register :: UTP -> STM Bool
 register stream = do
   let manager = endpoint stream
@@ -264,8 +275,8 @@ failStream stream message = do
 
 -- | Open a connection using the shared socket, including sockets that are also
 -- accepting peers. IDs are reserved atomically; cancellation removes the route.
-connectUTP :: UTPSocket -> SockAddr -> IO UTP
-connectUTP manager peer = mask $ \restore -> do
+connectUTP :: UTP -> SockAddr -> IO UTP
+connectUTP utp peer = mask $ \restore -> do
   now <- microseconds
   seed <- randomWord16
   let choose cid remaining = do
@@ -273,9 +284,9 @@ connectUTP manager peer = mask $ \restore -> do
         let syn = SentPacket Syn BS.empty now now 1 False False
             state = (newConnection now Connecting 2 0 0 (fromIntegral receiveCapacity))
               { sentPackets = Seq.singleton (1, syn) }
-        stream <- newStream manager peer (cid + 1) cid Nothing state
+        stream <- newStream (endpoint utp) peer (cid + 1) cid Nothing state
         registered <- atomically $ do
-          count <- Map.size <$> readTVar (connections manager)
+          count <- Map.size <$> readTVar (connections $ endpoint utp)
           when (count >= 1024) (throwSTM (userError "Too many uTP connections"))
           register stream
         if registered then pure stream else choose (cid + 1) (remaining - 1)
@@ -292,12 +303,12 @@ connectUTP manager peer = mask $ \restore -> do
 
 -- | Wait for another incoming connection. This can be called repeatedly or
 -- concurrently; accepted streams continue using this same UDP socket.
-acceptUTP :: UTPSocket -> IO UTP
-acceptUTP manager = mask $ \_ -> atomically accept
+acceptUTP :: UTP -> IO UTP
+acceptUTP utp = mask $ \_ -> atomically accept
   where
     accept = do
-      checkSocket manager
-      stream <- readTBQueue (accepting manager)
+      checkSocket $ endpoint utp
+      stream <- readTBQueue (accepting $ endpoint utp)
       state <- readTVar (connection stream)
       case phase state of
         Connected -> pure stream
@@ -694,6 +705,16 @@ takeIncoming count chunks = case Seq.viewl chunks of
     in (front, if BS.null back then rest else back Seq.<| rest)
 
 instance PeerStream UTP where
+  peekBytes stream n = withMVar (readLock stream) $ \() -> do
+    when (n < 0) (fail "Negative peek length")
+    if n == 0 then pure BS.empty else atomically $ do
+      state <- readTVar (connection stream)
+      checkReadable state
+      let bytes = BS.take n (BS.concat (toList (incoming state)))
+      when (BS.length bytes < n) $
+        if remoteFinished state then throwSTM (userError "Unexpected EOF") else retry
+      pure bytes
+
   readBytes stream n = withMVar (readLock stream) $ \() -> do
     when (n < 0) (fail "Negative read length")
     let go 0 chunks = pure (BS.concat (reverse chunks))

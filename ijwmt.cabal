@@ -15,6 +15,7 @@ build-type:    Simple
 
 common warnings
   ghc-options: -Wall
+               -threaded
 
 executable ijwmt
   import:           warnings
@@ -22,10 +23,13 @@ executable ijwmt
 
   -- other-extensions:
   other-modules:    System.Args
+                    Network.PeerPool
   build-depends:
     , base        ^>=4.20.2.0
     , bytestring
     , ijwmt
+    , async
+    , network
 
   hs-source-dirs:   app
   default-language: Haskell2010

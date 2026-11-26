@@ -9,7 +9,7 @@ import qualified Crypto.Hash.SHA1 as SHA1
 import Data.Bits (Bits (setBit, shiftL, shiftR, xor, (.&.), (.|.)))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Network.BitTorrent (PeerStream (readBytes, writeBytes))
+import Network.BitTorrent (PeerStream (peekBytes, readBytes, writeBytes))
 import System.Entropy (getEntropy)
 import Prelude hiding (exponent)
 
@@ -24,17 +24,17 @@ data IncomingProtocol
 detectProtocol ::
   (PeerStream a) =>
   a ->
-  IO
-    (IncomingProtocol, BS.ByteString)
+  IO IncomingProtocol
 detectProtocol stream = do
-  prefix <- readExactly stream 20
+  prefix <- peekBytes stream 20
+  check (BS.length prefix == 20) "unexpected EOF in protocol prefix"
 
   let protocol =
         if prefix == btPrefix
           then IncomingPlaintext
           else IncomingMSE
 
-  pure (protocol, prefix)
+  pure protocol
 
 dhKeySize :: Int
 dhKeySize = 96
@@ -201,16 +201,16 @@ initiate skey stream = do
   received <- readPadding stream headerState (BS.drop 4 header)
   newMSE stream (Just received) (Just sent) BS.empty
 
-respond :: (PeerStream a) => ByteString -> a -> IO (Either ByteString (MSE a))
+respond :: (PeerStream a) => ByteString -> a -> IO (Maybe (MSE a))
 respond skey stream = do
   validateInfoHash skey
-  (protocol, prefix) <- detectProtocol stream
+  protocol <- detectProtocol stream
   case protocol of
-    IncomingPlaintext -> pure (Left prefix)
+    IncomingPlaintext -> pure Nothing
     IncomingMSE -> do
-      rest <- readExactly stream (dhKeySize - BS.length prefix)
+      remote <- readExactly stream dhKeySize
       private <- generatePrivateExponent
-      secret <- fromEither (deriveSharedSecret dhPrime private (prefix <> rest))
+      secret <- fromEither (deriveSharedSecret dhPrime private remote)
       sendPublicKey stream private
       synchronize stream (SHA1.hash ("req1" <> secret))
       identifier <- readExactly stream 20
@@ -234,9 +234,17 @@ respond skey stream = do
               (vc <> method selected <> word16 (BS.length padding) <> padding)
       writeBytes stream encrypted
       let payloadCipher state = if selected == 2 then Just state else Nothing
-      Right <$> newMSE stream (payloadCipher received) (payloadCipher sent) initial
+      Just <$> newMSE stream (payloadCipher received) (payloadCipher sent) initial
 
 instance (PeerStream a) => PeerStream (MSE a) where
+  peekBytes (MSE stream incoming _) count = do
+    check (count >= 0) "negative peek length"
+    modifyMVar incoming $ \(state, buffered) -> do
+      wire <- readExactly stream (max 0 (count - BS.length buffered))
+      let (next, plaintext) = maybe (Nothing, wire) (\s -> let (s', decoded) = RC4.combine s wire in (Just s', decoded)) state
+          bytes = buffered <> plaintext
+      pure ((next, bytes), BS.take count bytes)
+
   readBytes (MSE stream incoming _) count = do
     check (count >= 0) "negative read length"
     if count == 0

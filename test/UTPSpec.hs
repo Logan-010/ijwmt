@@ -90,9 +90,14 @@ withWorker action use = do
   bracket (forkFinally action (putMVar result)) killThread $ \_ ->
     use (readMVar result >>= either throwIO pure)
 
-withUTPSocket :: (UTPSocket -> Socket -> IO a) -> IO a
-withUTPSocket use = withSocket $ \sock ->
-  bracket (newUTPSocket sock) closeUTPSocket (\manager -> use manager sock)
+withUTPSocket :: (UTP -> Socket -> IO a) -> IO a
+withUTPSocket use = withUTPManager $ \_ handle sock -> use handle sock
+
+withUTPManager :: (UTPSocket -> UTP -> Socket -> IO a) -> IO a
+withUTPManager use = withSocket $ \sock ->
+  bracket (newUTPSocket sock) closeUTPSocket $ \manager -> do
+    handle <- newUTP manager
+    use manager handle sock
 
 streamTest :: IO ()
 streamTest = withUTPSocket $ \server serverSocket -> withUTPSocket $ \client _ -> do
@@ -102,6 +107,8 @@ streamTest = withUTPSocket $ \server serverSocket -> withUTPSocket $ \client _ -
     receiver <- accepted
     let bytes = BS.concat (replicate 40 (BS.pack [0 .. 255]))
         exchange a b body = withWorker (writeBytes a body) $ \sent -> do
+          assertEqual (BS.take 37 body) =<< peekBytes b 37
+          assertEqual (BS.take 17 body) =<< peekBytes b 17
           first <- readBytes b 37
           rest <- readBytes b (BS.length body - 37)
           assertEqual body (first <> rest)
@@ -404,19 +411,19 @@ equalIdsTest = withUTPSocket $ \server serverSocket -> withSocket $ \a -> withSo
   abortUTP second
 
 socketCloseTest :: IO ()
-socketCloseTest = withUTPSocket $ \server serverSocket -> withUTPSocket $ \client _ -> do
+socketCloseTest = withUTPManager $ \manager server serverSocket -> withUTPSocket $ \client _ -> do
   peer <- NS.getSocketName serverSocket
   sender <- connectUTP client peer
   receiver <- acceptUTP server
   withWorker (acceptUTP server) $ \accepted ->
     withWorker (readBytes receiver 1) $ \reading ->
       withWorker (writeBytes receiver (BS.replicate (2 * 1024 * 1024) 42)) $ \writing -> do
-        closeUTPSocket server
+        closeUTPSocket manager
         assertIOFailure accepted
         assertIOFailure reading
         assertIOFailure writing
         assertIOFailure (connectUTP server peer)
-        closeUTPSocket server
+        closeUTPSocket manager
   abortUTP sender
 
 selectiveRecoveryTest :: IO ()

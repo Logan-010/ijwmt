@@ -11,9 +11,9 @@ import qualified Crypto.Hash.SHA1 as SHA1
 import Data.Bits (shiftR, xor, (.&.))
 import qualified Data.ByteString as BS
 import Data.IORef
-import Network.BitTorrent (PeerStream (..))
+import Network.BitTorrent (AnyPeerStream (..), PeerStream (..))
 import qualified Network.BitTorrent.Transport.MSE as MSE
-import Network.BitTorrent.Transport.TCP (TCP (..))
+import Network.BitTorrent.Transport.TCP (TCP (..), newTcpSocket)
 import qualified Network.Socket as NS
 import System.Timeout (timeout)
 import TestSupport
@@ -22,7 +22,8 @@ tests :: [Test]
 tests =
   [ ("MSE: RC4 library RFC 6229 drop-1024 vector", rc4Vector),
     ("MSE: bidirectional encrypted stream and fragmented reads", bounded roundTrip),
-    ("MSE: legacy detection retains exactly the prefix", legacy),
+    ("MSE: legacy detection leaves the full handshake untouched", legacy),
+    ("MSE: repeated TCP legacy detection preserves the handshake", bounded legacyTCP),
     ("MSE: truncated protocol prefix", rejects (MSE.respond infoHash =<< memory "short")),
     ("MSE: invalid info hashes", invalidHashes),
     ("MSE: negative read rejected without changing state", bounded negativeRead)
@@ -121,12 +122,16 @@ withPair use =
   bracket
     (NS.socketPair NS.AF_UNIX NS.Stream NS.defaultProtocol)
     (\(a, b) -> NS.close a >> NS.close b)
-    (\(a, b) -> use (TCP a) (TCP b))
+    (\(a, b) -> do
+      left <- newTcpSocket a
+      right <- newTcpSocket b
+      use left right)
 
 -- Deliberately return partial reads, including during legacy detection.
 newtype Fragmented = Fragmented TCP
 
 instance PeerStream Fragmented where
+  peekBytes (Fragmented stream) = peekBytes stream
   readBytes (Fragmented stream) n = readBytes stream (min 3 n)
   writeBytes (Fragmented stream) = writeBytes stream
 
@@ -136,18 +141,41 @@ memory :: BS.ByteString -> IO Memory
 memory bytes = Memory <$> newIORef bytes
 
 instance PeerStream Memory where
+  peekBytes (Memory ref) n = do
+    bytes <- readIORef ref
+    if n < 0 || BS.length bytes < n
+      then fail "Invalid peek length or unexpected EOF"
+      else pure (BS.take n bytes)
   readBytes (Memory ref) n = atomicModifyIORef' ref $ \bytes ->
     let (prefix, rest) = BS.splitAt (min 3 n) bytes in (rest, prefix)
   writeBytes _ _ = pure ()
 
 legacy :: IO ()
 legacy = do
-  stream <- memory (BS.cons 19 "BitTorrent protocol" <> "untouched")
+  let handshake = BS.cons 19 "BitTorrent protocol" <> zeros 8 <> infoHash <> BS.replicate 20 1
+  stream <- memory (handshake <> "untouched")
   result <- MSE.respond infoHash stream
   case result of
-    Left prefix -> assertEqual (BS.cons 19 "BitTorrent protocol") prefix
-    Right _ -> fail "Legacy handshake detected as MSE"
-  assertEqual "unt" =<< readBytes stream 9
+    Nothing -> pure ()
+    Just _ -> fail "Legacy handshake detected as MSE"
+  chunks <- mapM (readBytes stream) (replicate 22 3 ++ [2])
+  assertEqual handshake (BS.concat chunks)
+  assertEqual "unt" =<< readBytes stream 3
+
+legacyTCP :: IO ()
+legacyTCP = withPair $ \a b -> do
+  let handshake = BS.cons 19 "BitTorrent protocol" <> zeros 8 <> infoHash <> BS.replicate 20 1
+      stream = AnyPeerStream b
+  writeBytes a handshake
+  assertEqual "" =<< peekBytes stream 0
+  rejects (peekBytes stream (-1))
+  mapM_ (\_ -> do
+    result <- MSE.respond infoHash stream
+    case result of
+      Nothing -> pure ()
+      Just _ -> fail "Legacy handshake detected as MSE") [1, 2 :: Int]
+  assertEqual handshake =<< peekBytes stream 68
+  assertEqual handshake =<< readBytes stream 68
 
 invalidHashes :: IO ()
 invalidHashes =
@@ -160,7 +188,7 @@ invalidHashes =
     [0, 19, 21]
 
 accept :: (PeerStream a) => a -> IO (MSE.MSE a)
-accept stream = MSE.respond infoHash stream >>= either (const (fail "Expected MSE")) pure
+accept stream = MSE.respond infoHash stream >>= maybe (fail "Expected MSE") pure
 
 roundTrip :: IO ()
 roundTrip = withPair $ \a b -> withWorker (accept (Fragmented b)) $ \accepted -> do
@@ -172,6 +200,8 @@ roundTrip = withPair $ \a b -> withWorker (accept (Fragmented b)) $ \accepted ->
     assertEqual "" =<< readBytes sender 0
     writeBytes sender (BS.take 17 payload)
     writeBytes sender (BS.drop 17 payload)
+    assertEqual (BS.take 31 payload) =<< peekBytes receiver 31
+    assertEqual (BS.take 17 payload) =<< peekBytes receiver 17
     first <- readBytes receiver 31
     rest <- readBytes receiver (BS.length payload - 31)
     assertEqual payload (first <> rest)
@@ -183,6 +213,7 @@ negativeRead = withPair $ \a b -> withWorker (accept b) $ \accepted -> do
   sender <- MSE.initiate infoHash a
   receiver <- accepted
   rejects (readBytes receiver (-1))
+  rejects (peekBytes receiver (-1))
   writeBytes sender "ok"
   assertEqual "ok" =<< readBytes receiver 2
 
@@ -258,6 +289,7 @@ responderReference offered padding initialSize = withPair $ \a b ->
     receiver <- accepted
     let (_, encryptedPayload) = RC4.combine sent ("next payload" :: BS.ByteString)
     writeBytes a (if selected == 2 then encryptedPayload else "next payload")
+    assertEqual (BS.take 12 (initial <> "next payload")) =<< peekBytes receiver 12
     first <- readBytes receiver (min 13 initialSize)
     rest <- readBytes receiver (initialSize - BS.length first + 12)
     assertEqual (initial <> "next payload") (first <> rest)
