@@ -24,7 +24,7 @@ tests =
     ("MSE: bidirectional encrypted stream and fragmented reads", bounded roundTrip),
     ("MSE: legacy detection leaves the full handshake untouched", legacy),
     ("MSE: repeated TCP legacy detection preserves the handshake", bounded legacyTCP),
-    ("MSE: truncated protocol prefix", rejects (MSE.respond infoHash =<< memory "short")),
+    ("MSE: truncated protocol prefix", rejects (MSE.respond lookupHash =<< memory "short")),
     ("MSE: invalid info hashes", invalidHashes),
     ("MSE: negative read rejected without changing state", bounded negativeRead)
   ]
@@ -46,7 +46,7 @@ tests =
        ]
     ++ [ ( "MSE: rejects invalid DH public key " ++ show public,
            do
-             rejects (MSE.respond infoHash =<< memory (fixed 96 public))
+             rejects (MSE.respond lookupHash =<< memory (fixed 96 public))
              rejects (MSE.initiate infoHash =<< memory (fixed 96 public))
          )
        | public <- [0, 1, prime - 1, prime]
@@ -54,6 +54,9 @@ tests =
 
 infoHash :: BS.ByteString
 infoHash = SHA1.hash "test torrent"
+
+lookupHash :: BS.ByteString -> IO (Maybe BS.ByteString)
+lookupHash identifier = pure $ lookup identifier [(SHA1.hash ("req2" <> hash), hash) | hash <- [SHA1.hash "another torrent", infoHash]]
 
 zeros :: Int -> BS.ByteString
 zeros n = BS.replicate n 0
@@ -122,10 +125,11 @@ withPair use =
   bracket
     (NS.socketPair NS.AF_UNIX NS.Stream NS.defaultProtocol)
     (\(a, b) -> NS.close a >> NS.close b)
-    (\(a, b) -> do
-      left <- newTcpSocket a
-      right <- newTcpSocket b
-      use left right)
+    ( \(a, b) -> do
+        left <- newTcpSocket a
+        right <- newTcpSocket b
+        use left right
+    )
 
 -- Deliberately return partial reads, including during legacy detection.
 newtype Fragmented = Fragmented TCP
@@ -154,7 +158,7 @@ legacy :: IO ()
 legacy = do
   let handshake = BS.cons 19 "BitTorrent protocol" <> zeros 8 <> infoHash <> BS.replicate 20 1
   stream <- memory (handshake <> "untouched")
-  result <- MSE.respond infoHash stream
+  result <- MSE.respond lookupHash stream
   case result of
     Nothing -> pure ()
     Just _ -> fail "Legacy handshake detected as MSE"
@@ -169,11 +173,14 @@ legacyTCP = withPair $ \a b -> do
   writeBytes a handshake
   assertEqual "" =<< peekBytes stream 0
   rejects (peekBytes stream (-1))
-  mapM_ (\_ -> do
-    result <- MSE.respond infoHash stream
-    case result of
-      Nothing -> pure ()
-      Just _ -> fail "Legacy handshake detected as MSE") [1, 2 :: Int]
+  mapM_
+    ( \_ -> do
+        result <- MSE.respond lookupHash stream
+        case result of
+          Nothing -> pure ()
+          Just _ -> fail "Legacy handshake detected as MSE"
+    )
+    [1, 2 :: Int]
   assertEqual handshake =<< peekBytes stream 68
   assertEqual handshake =<< readBytes stream 68
 
@@ -183,12 +190,11 @@ invalidHashes =
     ( \n -> do
         stream <- memory ""
         rejects (MSE.initiate (zeros n) stream)
-        rejects (MSE.respond (zeros n) stream)
     )
     [0, 19, 21]
 
 accept :: (PeerStream a) => a -> IO (MSE.MSE a)
-accept stream = MSE.respond infoHash stream >>= maybe (fail "Expected MSE") pure
+accept stream = MSE.respond lookupHash stream >>= maybe (fail "Expected MSE") (\(hash, mse) -> assertEqual infoHash hash >> pure mse)
 
 roundTrip :: IO ()
 roundTrip = withPair $ \a b -> withWorker (accept (Fragmented b)) $ \accepted -> do

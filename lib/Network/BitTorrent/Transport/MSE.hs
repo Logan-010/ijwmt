@@ -201,9 +201,8 @@ initiate skey stream = do
   received <- readPadding stream headerState (BS.drop 4 header)
   newMSE stream (Just received) (Just sent) BS.empty
 
-respond :: (PeerStream a) => ByteString -> a -> IO (Maybe (MSE a))
-respond skey stream = do
-  validateInfoHash skey
+respond :: (PeerStream a) => (ByteString -> IO (Maybe ByteString)) -> a -> IO (Maybe (ByteString, MSE a))
+respond lookupHash stream = do
   protocol <- detectProtocol stream
   case protocol of
     IncomingPlaintext -> pure Nothing
@@ -214,8 +213,11 @@ respond skey stream = do
       sendPublicKey stream private
       synchronize stream (SHA1.hash ("req1" <> secret))
       identifier <- readExactly stream 20
+      let key = xorBytes identifier (SHA1.hash ("req3" <> secret))
+      skey <- lookupHash key >>= maybe (fail "MSE: unknown torrent info hash") pure
+      validateInfoHash skey
       check
-        (identifier == xorBytes (SHA1.hash ("req2" <> skey)) (SHA1.hash ("req3" <> secret)))
+        (key == SHA1.hash ("req2" <> skey))
         "unknown torrent info hash"
       let incoming = cipher "keyA" secret skey
           outgoing = cipher "keyB" secret skey
@@ -234,7 +236,8 @@ respond skey stream = do
               (vc <> method selected <> word16 (BS.length padding) <> padding)
       writeBytes stream encrypted
       let payloadCipher state = if selected == 2 then Just state else Nothing
-      Just <$> newMSE stream (payloadCipher received) (payloadCipher sent) initial
+      mse <- newMSE stream (payloadCipher received) (payloadCipher sent) initial
+      pure $ Just (skey, mse)
 
 instance (PeerStream a) => PeerStream (MSE a) where
   peekBytes (MSE stream incoming _) count = do
