@@ -1,6 +1,7 @@
 module Network.BitTorrent.Tracker (module Network.BitTorrent.Tracker.Types, Tracker (..), new, announce) where
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import qualified Network.BitTorrent.Tracker.HTTP as HTTP
 import Network.BitTorrent.Tracker.Types
 import qualified Network.BitTorrent.Tracker.UDP as UDP
@@ -11,14 +12,17 @@ import qualified Network.URL as URL
 
 data Tracker = HTTP (Manager, URL) | UDP UDP.TrackerRequestData 
 
-new :: Manager -> URL -> ByteString -> ByteString -> ByteString -> PortNumber -> Int -> Int -> Int -> Event -> Bool -> Int -> Maybe Tracker
-new manager base infoHash peer identifier port uploaded downloaded left event compact numwant =
+new :: Manager -> URL -> ByteString -> ByteString -> PortNumber -> Int -> Int -> Int -> Event -> Bool -> Int -> Maybe Tracker
+new manager base fullInfoHash peer port uploaded downloaded left event compact numwant =
   case url_type base of
     Absolute h -> case protocol h of
-      URL.HTTP _ -> Just (HTTP (manager, HTTP.encode base infoHash identifier port uploaded downloaded left event compact numwant))
+      URL.HTTP _ -> Just (HTTP (manager, HTTP.encode base infoHash peer port uploaded downloaded left event compact numwant))
       URL.RawProt "udp" -> Just (UDP (UDP.TrackerRequestData h infoHash peer downloaded left uploaded event numwant port))
       _ -> Nothing
     _ -> Nothing
+  where
+    -- BEP 52 uses the first 20 bytes of v2 infohashes in tracker announces.
+    infoHash = BS.take 20 fullInfoHash
 
 announce :: Tracker -> IO TrackerResponse
 announce tracker = case tracker of

@@ -28,7 +28,10 @@ getPort sock = socketPort sock
 newTcp :: String -> IO Socket
 newTcp addr =
   case parseAddr addr of
-    Just (a, p) -> newSocket a p Stream
+    Just (a, p) -> do
+      sock <- newSocket a p Stream
+      listen sock 128
+      pure sock
     Nothing -> ioError $ userError "Invalid address"
 
 newUdp :: String -> IO Socket

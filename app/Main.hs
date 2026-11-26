@@ -8,15 +8,20 @@ import Control.Exception (bracket, onException)
 import Control.Monad (unless, void, (>=>))
 import Data.BitTorrent (Torrent (version), TorrentV1 (infoHash), TorrentV2 (infoHash))
 import qualified Data.BitTorrent as BT
-import Data.BitTorrent.Magnet (topic)
+import Data.BitTorrent.Magnet (Topic (..), topic)
 import qualified Data.BitTorrent.Magnet as MG
+import Data.BitTorrent.Wire (generatePeerId)
 import qualified Data.ByteString as BS
-import Data.Maybe (catMaybes)
-import Network.BitTorrent.Socket (newTcp, newUdp)
+import qualified Data.List as List
+import Data.Maybe (catMaybes, maybeToList)
+import Network.BitTorrent.Socket (getPort, newTcp, newUdp)
+import Network.BitTorrent.Tracker (Event (Started))
+import qualified Network.BitTorrent.Tracker as TR
 import qualified Network.BitTorrent.Transport.TCP as TCP
 import qualified Network.BitTorrent.Transport.UTP as UTP
+import Network.BitTorrent.Util (initManager)
 import Network.PeerPool (acceptTCPTask, acceptUTPTask, newPeerPool, registerTorrent)
-import Network.Socket (close, listen)
+import Network.Socket (close)
 import qualified System.Args as AG
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
@@ -38,13 +43,19 @@ main = do
               hPutStrLn stderr AG.versionStr
             else do
               pool <- newPeerPool
+              manager <- initManager
+              peerId <- generatePeerId
+              let listenAddr port =
+                    (if ':' `elem` AG.interface c then "[" ++ AG.interface c ++ "]" else AG.interface c)
+                      ++ ":"
+                      ++ show (port :: Int)
 
               bracket
                 ( if AG.noTcp c
                     then pure Nothing
                     else do
-                      socket <- newTcp (AG.tcpAddr c)
-                      Just <$> (listen socket 128 >> TCP.newTcpSocket socket) `onException` close socket
+                      newTcp (listenAddr (AG.port c)) >>= \socket ->
+                        Just <$> TCP.newTcpSocket socket `onException` close socket
                 )
                 (mapM_ (close . TCP.inner))
                 $ \tcp ->
@@ -52,8 +63,10 @@ main = do
                     ( if AG.noUtp c
                         then pure Nothing
                         else do
-                          socket <- newUdp (AG.utpAddr c)
-                          Just <$> UTP.newUTPSocket socket `onException` close socket
+                          -- Reuse TCP's assigned port when the requested port is zero.
+                          port <- maybe (pure (AG.port c)) (fmap fromIntegral . getPort . TCP.inner) tcp
+                          newUdp (listenAddr port) >>= \socket ->
+                            Just <$> UTP.newUTPSocket socket `onException` close socket
                     )
                     (mapM_ UTP.closeUTPSocket)
                     $ \utp ->
@@ -67,6 +80,11 @@ main = do
                             $ \utpTask ->
                               do
                                 let tasks = catMaybes [tcpTask, utpTask]
+
+                                port <- case (tcp, utp) of
+                                  (Just t, _) -> getPort t.inner
+                                  (_, Just t) -> UTP.localPort t
+                                  _ -> fail "No listeners"
 
                                 -- Create Callbacks
                                 let mcb _ps = pure ()
@@ -98,5 +116,24 @@ main = do
                                   )
                                   $ AG.files
                                     c
+
+                                let magnetTrackers =
+                                      [ let ifh = case tpc of
+                                              V1 b -> b
+                                              V2 b -> b
+                                         in TR.new manager url ifh peerId port 0 0 0 Started True 50
+                                        | mg <- AG.magnets c,
+                                          url <- MG.trackerUrl mg,
+                                          tpc <- MG.topic mg
+                                        ]
+                                let torrentTrackers =
+                                      [ TR.new manager url ifh peerId port 0 0 0 Started True 50
+                                      | to <- AG.files c,
+                                        url <- List.concat $ maybeToList (BT.announce to) : BT.announceList to,
+                                        ifh <- case BT.version to of
+                                            BT.V1 t -> [t.infoHash]
+                                            BT.V2 t -> [t.infoHash]
+                                            BT.Hybrid f t -> [f.infoHash, t.infoHash]
+                                      ]
 
                                 unless (null tasks) (void $ waitAny tasks)

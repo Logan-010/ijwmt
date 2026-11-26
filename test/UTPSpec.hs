@@ -20,6 +20,10 @@ import TestSupport
 tests :: [Test]
 tests =
   [ ("uTP: encode network-order fixture", assertEqual fixture (encodePacket packet)),
+    ("uTP: local port matches bound socket", withSocket $ \sock -> do
+        expected <- NS.socketPort sock
+        bracket (newUTPSocket sock) closeUTPSocket $ \manager ->
+          localPort manager >>= assertEqual expected),
     ("uTP: decode network-order fixture", assertEqual (Right packet) (decodePacket fixture)),
     ("uTP: extension chain", assertEqual (Right extended) (decodePacket (encodePacket extended))),
     ("uTP: reject invalid encoder extension", assertThrows (encodePacket packet { extensions = [(0, "")] })),

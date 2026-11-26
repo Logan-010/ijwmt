@@ -5,10 +5,13 @@ module TrackerHTTPSpec (tests) where
 import Control.Exception (IOException, try)
 import qualified Data.BitTorrent.Bencode as BE
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
 import qualified Data.Map as Map
 import Network.BitTorrent.Tracker
 import qualified Network.BitTorrent.Tracker.HTTP as HTTP
+import Network.BitTorrent.Util (initManager)
 import Network.Socket (SockAddr (..), tupleToHostAddress, tupleToHostAddress6)
+import Network.URL (importURL, url_params)
 import System.IO.Error (ioeGetErrorString)
 import TestSupport
 
@@ -33,6 +36,15 @@ tests =
           Left err -> assertEqual "Invalid tracker response: not registered" (ioeGetErrorString err)
           Right value -> fail ("Expected tracker failure, got " ++ show value))
   ]
+    ++ [("tracker HTTP: new accepts " ++ label ++ " infohash", do
+           manager <- initManager
+           case importURL address of
+             Nothing -> fail "Invalid test URL"
+             Just url -> case new manager url infoHash (BS.replicate 20 2) 6881 0 0 0 Started True 50 of
+               Just (HTTP (_, request)) -> assertEqual (Just (BSC.unpack (BS.take 20 infoHash))) (lookup "info_hash" (url_params request))
+               _ -> fail "HTTP URL rejected")
+       | (label, infoHash) <- [("v1", BS.replicate 20 97), ("v2", BS.replicate 20 97 <> BS.replicate 12 98)],
+         address <- ["http://tracker.example/announce", "https://tracker.example/announce"]]
     ++ [("tracker HTTP: reject " ++ label, rejected (BE.encode value)) | (label, value) <- invalid]
     ++ [("tracker HTTP: reject truncated compact IPv4 " ++ show n, rejected (payload [("peers", BE.BString (BS.take n compact4))])) | n <- [1 .. 5]]
     ++ [("tracker HTTP: reject truncated compact IPv6 " ++ show n, rejected (payload [("peers6", BE.BString (BS.take n compact6))])) | n <- [1 .. 17]]

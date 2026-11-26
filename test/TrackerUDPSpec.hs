@@ -24,6 +24,12 @@ tests =
   [ ("UDP IPv4 packet layout and peers", successful AF_INET peers4 expected4),
     ("UDP IPv6 packet layout and peers", successful AF_INET6 peers6 expected6),
     ("UDP empty peer list", successful AF_INET "" []),
+    ("UDP v2 infohash is truncated by new", withTracker AF_INET (\tid -> response tid "") $ \req -> do
+        manager <- initManager
+        let url = URL (Absolute (UDP.host req)) "announce" []
+        case Tracker.new manager url (UDP.infoHash req <> BS.replicate 12 3) (UDP.peer req) 51413 3 1 2 Started True (-1) of
+          Nothing -> fail "UDP URL rejected"
+          Just tracker -> Tracker.announce tracker >>= assertEqual (TrackerResponse 1800 (Just 7) (Just 11) [])),
     ("UDP tracker errors", rejected (\tid -> word 3 <> tid <> "not registered")),
     ("UDP short announce", rejected (\tid -> word 1 <> tid)),
     ("UDP malformed compact peers", rejected (\tid -> response tid "x")),
@@ -38,7 +44,7 @@ tests =
       -- Exercise the public dispatcher too.
       manager <- initManager
       let url = URL (Absolute (UDP.host req)) "announce" []
-      case Tracker.new manager url (UDP.infoHash req) (UDP.peer req) "unused" 51413 3 1 2 Started True (-1) of
+      case Tracker.new manager url (UDP.infoHash req) (UDP.peer req) 51413 3 1 2 Started True (-1) of
         Nothing -> fail "UDP URL rejected"
         Just tracker -> Tracker.announce tracker >>= assertEqual (TrackerResponse 1800 (Just 7) (Just 11) expected)
     rejected reply = withTracker AF_INET reply $ \req -> do

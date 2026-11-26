@@ -4,6 +4,7 @@ module Network.BitTorrent.Transport.UTP
     newUTPSocket,
     newUTP,
     closeUTPSocket,
+    localPort,
     connectUTP,
     acceptUTP,
     closeUTP,
@@ -39,6 +40,10 @@ import System.Entropy (getEntropy)
 import System.IO.Error (tryIOError)
 
 type Key = (SockAddr, Word16)
+
+-- | Return the bound port without exposing the shared UDP socket.
+localPort :: UTPSocket -> IO NS.PortNumber
+localPort manager = NS.socketPort (socket manager)
 
 -- | A shared, bound UDP socket. Exactly one dispatcher receives datagrams;
 -- connections are identified by both the remote address and connection ID.

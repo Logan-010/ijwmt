@@ -7,21 +7,22 @@ import Data.BitTorrent.Magnet (Magnet)
 import qualified Data.BitTorrent.Magnet as MG
 import qualified Data.ByteString as BS
 import Data.List (uncons)
+import Text.Read (readMaybe)
 
 data Args = Args
   { help :: Bool,
     version :: Bool,
     noTcp :: Bool,
-    tcpAddr :: String,
     noUtp :: Bool,
-    utpAddr :: String,
+    interface :: String,
+    port :: Int,
     files :: [Torrent],
     magnets :: [Magnet]
   }
   deriving (Show, Eq)
 
 defaultArgs :: Args
-defaultArgs = Args False False False "[::]:8877" False "[::]:8877" [] []
+defaultArgs = Args False False False False "::" 8877 [] []
 
 helpStr :: String
 helpStr =
@@ -34,9 +35,9 @@ helpStr =
       "  -h, --help            Show this help message",
       "  -v, --version         Show version information",
       "  -t, --noTcp           Disable TCP connections",
-      "  -T, --tcpAddr ADDR    Set TCP listen address (default: [::]:8877)",
       "  -u, --noUtp           Disable uTP connections",
-      "  -U, --utpAddr ADDR    Set uTP listen address (default: [::]:8877)",
+      "  -i, --interface ADDR  Set TCP and uTP bind IP address (default: ::)",
+      "  -p, --port PORT       Set TCP and uTP port (default: 8877; 0: automatic)",
       "  -f, --file PATH       Load a torrent file (can be repeated)",
       "",
       "Arguments:",
@@ -45,7 +46,7 @@ helpStr =
       "Examples:",
       "  ijwmt magnet:?xt=urn:btih:...",
       "  ijwmt -f example.torrent",
-      "  ijwmt -T 0.0.0.0:6881 -f example.torrent",
+      "  ijwmt -i 0.0.0.0 -p 6881 -f example.torrent",
       "  ijwmt -t -f example.torrent"
     ]
 
@@ -62,13 +63,15 @@ parse args =
         | h `elem` ["-h", "--help"] -> parse' t $ p {help = True}
         | h `elem` ["-v", "--version"] -> parse' t $ p {version = True}
         | h `elem` ["-t", "--noTcp"] -> parse' t $ p {noTcp = True}
-        | h `elem` ["-T", "--tcpAddr"] -> case uncons t of
-            Just (he, ta) -> parse' ta $ p {tcpAddr = he}
-            Nothing -> pure $ Left "Missing TCP listen address"
         | h `elem` ["-u", "--noUtp"] -> parse' t $ p {noUtp = True}
-        | h `elem` ["-U", "--utpAddr"] -> case uncons t of
-            Just (he, ta) -> parse' ta $ p {utpAddr = he}
-            Nothing -> pure $ Left "Missing uTP listen address"
+        | h `elem` ["-i", "--interface"] -> case uncons t of
+            Just (he, ta) -> parse' ta $ p {interface = he}
+            Nothing -> pure $ Left "Missing listen interface"
+        | h `elem` ["-p", "--port"] -> case uncons t of
+            Just (he, ta) -> case readMaybe he of
+              Just n | n >= 0 && n <= 65535 -> parse' ta $ p {port = n}
+              _ -> pure $ Left "Invalid listen port (expected 0-65535)"
+            Nothing -> pure $ Left "Missing listen port"
         | h `elem` ["-f", "--file"] -> case uncons t of
             Just (he, ta) ->
               BS.readFile he >>= \c ->
