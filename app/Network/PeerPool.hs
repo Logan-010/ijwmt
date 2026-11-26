@@ -112,5 +112,3 @@ offloadPeer :: PeerPool -> ByteString -> AnyPeerStream -> IO ()
 offloadPeer (PeerPool torrents _ _) infoHash stream = do
   handler <- Map.lookup infoHash . fst <$> readTVarIO torrents
   maybe (fail "Unknown torrent info hash") ($ stream) handler
-  -- TODO
-  pure ()

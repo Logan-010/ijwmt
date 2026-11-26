@@ -1,0 +1,8 @@
+cradle:
+  cabal:
+    - path: "app"
+      component: "ijwmt:exe:ijwmt"
+    - path: "lib"
+      component: "ijwmt:lib:ijwmt"
+    - path: "test"
+      component: "ijwmt:test:ijwmt-test"

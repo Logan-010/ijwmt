@@ -1,13 +1,21 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Main (main) where
 
 import Control.Concurrent.Async (cancel, waitAny)
 import Control.Exception (bracket, onException)
-import Control.Monad (unless, void)
+import Control.Monad (unless, void, (>=>))
+import Data.BitTorrent (Torrent (version), TorrentV1 (infoHash), TorrentV2 (infoHash))
+import qualified Data.BitTorrent as BT
+import Data.BitTorrent.Magnet (topic)
+import qualified Data.BitTorrent.Magnet as MG
+import qualified Data.ByteString as BS
 import Data.Maybe (catMaybes)
 import Network.BitTorrent.Socket (newTcp, newUdp)
 import qualified Network.BitTorrent.Transport.TCP as TCP
 import qualified Network.BitTorrent.Transport.UTP as UTP
-import Network.PeerPool (acceptTCPTask, acceptUTPTask, newPeerPool)
+import Network.PeerPool (acceptTCPTask, acceptUTPTask, newPeerPool, registerTorrent)
 import Network.Socket (close, listen)
 import qualified System.Args as AG
 import System.Environment (getArgs)
@@ -54,11 +62,41 @@ main = do
                         (mapM_ cancel)
                         $ \tcpTask ->
                           bracket
-                            (traverse (\manager -> UTP.newUTP manager >>= acceptUTPTask pool) utp)
+                            (traverse (UTP.newUTP >=> acceptUTPTask pool) utp)
                             (mapM_ cancel)
-                            $ \utpTask -> do
-                              let tasks = catMaybes [tcpTask, utpTask]
+                            $ \utpTask ->
+                              do
+                                let tasks = catMaybes [tcpTask, utpTask]
 
-                              -- TODO
-                              
-                              unless (null tasks) (void $ waitAny tasks)
+                                -- Create Callbacks
+                                let mcb _ps = pure ()
+                                    tcb _ps = pure ()
+                                    mcb2 _ps = pure ()
+                                    tcb2 _ps = pure ()
+
+                                -- Register Magnets
+                                mapM_
+                                  ( mapM_
+                                      ( \case
+                                          MG.V1 b -> registerTorrent pool b mcb
+                                          MG.V2 b -> registerTorrent pool (BS.take 20 b) mcb2
+                                      )
+                                      . topic
+                                  )
+                                  $ AG.magnets
+                                    c
+
+                                -- Register Torrents
+                                mapM_
+                                  ( \t -> case version t of
+                                      BT.V1 v ->
+                                        registerTorrent pool v.infoHash tcb
+                                      BT.V2 v ->
+                                        registerTorrent pool (BS.take 20 v.infoHash) tcb2
+                                      BT.Hybrid f v ->
+                                        registerTorrent pool f.infoHash tcb >> registerTorrent pool (BS.take 20 v.infoHash) tcb2
+                                  )
+                                  $ AG.files
+                                    c
+
+                                unless (null tasks) (void $ waitAny tasks)

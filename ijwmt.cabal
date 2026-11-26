@@ -14,25 +14,26 @@ category:      Network
 build-type:    Simple
 
 common warnings
-  ghc-options: -Wall
-               -threaded
+  ghc-options: -Wall -threaded
 
 executable ijwmt
   import:           warnings
   main-is:          Main.hs
 
   -- other-extensions:
-  other-modules:    System.Args
-                    Network.PeerPool
-                    Capabilities
+  other-modules:
+    Capabilities
+    Network.PeerPool
+    System.Args
+
   build-depends:
-    , base        ^>=4.20.2.0
-    , bytestring
-    , ijwmt
     , async
-    , network
+    , base             ^>=4.20.2.0
+    , bytestring
     , containers
     , cryptohash-sha1
+    , ijwmt
+    , network
     , stm
 
   hs-source-dirs:   app
@@ -100,8 +101,6 @@ test-suite ijwmt-test
     ExtensionSpec
     MagnetSpec
     MSESpec
-    PeerPoolSpec
-    Network.PeerPool
     Network.BitTorrent
     Network.BitTorrent.Socket
     Network.BitTorrent.Tracker
@@ -115,6 +114,8 @@ test-suite ijwmt-test
     Network.BitTorrent.Transport.UTP.Packet
     Network.BitTorrent.Util
     Network.BitTorrent.Wire
+    Network.PeerPool
+    PeerPoolSpec
     TestSupport
     TorrentSpec
     TrackerHTTPSpec
