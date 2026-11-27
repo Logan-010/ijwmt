@@ -33,4 +33,4 @@ recvMessage stream = do
 
 sendMessage :: PeerStream a => a -> Message -> IO ()
 sendMessage stream msg =
-  writeBytes stream (encodeMessage msg)
+  either fail (writeBytes stream) (encodeMessage msg)

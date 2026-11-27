@@ -369,10 +369,13 @@ sendPackets manager = do
         _ -> True
   when live $ do
     now <- microseconds
-    result <- tryIOError (NSB.sendTo (socket manager) (encodePacket packet { timestamp = fromIntegral now }) peer)
-    case result of
-      Left err -> forM_ owner $ \stream -> atomically (failStream stream (displayException err))
-      Right _ -> pure ()
+    case encodePacket packet { timestamp = fromIntegral now } of
+      Left err -> forM_ owner $ \stream -> atomically (failStream stream err)
+      Right raw -> do
+        result <- tryIOError (NSB.sendTo (socket manager) raw peer)
+        case result of
+          Left err -> forM_ owner $ \stream -> atomically (failStream stream (displayException err))
+          Right _ -> pure ()
   sendPackets manager
 
 dispatchPackets :: UTPSocket -> IO ()

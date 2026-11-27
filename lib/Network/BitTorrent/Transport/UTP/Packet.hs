@@ -24,10 +24,10 @@ data Packet = Packet
   }
   deriving (Eq, Show)
 
-encodePacket :: Packet -> BS.ByteString
+encodePacket :: Packet -> Either String BS.ByteString
 encodePacket packet
-  | any invalid (extensions packet) = error "Invalid uTP extension"
-  | otherwise = BL.toStrict . toLazyByteString $
+  | any invalid (extensions packet) = Left "Invalid uTP extension"
+  | otherwise = Right . BL.toStrict . toLazyByteString $
       word8 (fromIntegral (fromEnum (packetType packet)) `shiftL` 4 .|. 1)
         <> word8 (firstExtension (extensions packet))
         <> word16BE (connectionId packet)

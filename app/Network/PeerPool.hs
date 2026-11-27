@@ -70,7 +70,7 @@ connectToPeer pool@(PeerPool _ _ peerId) utp infoHash addr =
               Right m -> pure $ AnyPeerStream m
           )
       >>= \peer -> do
-        writeBytes peer (encodeHandshake reserved infoHash peerId)
+        either fail (writeBytes peer) (encodeHandshake reserved infoHash peerId)
         (_, remoteHash, _) <- readBytes peer 68 >>= either fail pure . decodeHandshake
         unless (remoteHash == infoHash) (fail "Peer info hash does not match handshake")
         offloadPeer pool infoHash peer
@@ -98,7 +98,7 @@ acceptTask pool@(PeerPool torrents workers peerId) acceptPeer closePeer =
             when (maybe False (/= infoHash) expected) (fail "MSE info hash does not match handshake")
             known <- Map.member infoHash . fst <$> readTVarIO torrents
             unless known (fail "Unknown torrent info hash")
-            writeBytes stream (encodeHandshake reserved infoHash peerId)
+            either fail (writeBytes stream) (encodeHandshake reserved infoHash peerId)
             pure (infoHash, stream)
           case result of
             Nothing -> pure ()

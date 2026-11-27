@@ -34,13 +34,13 @@ generateReserved = BS.pack . foldl' setFlag (replicate 8 0)
           | (i, b) <- zip [0 :: Integer ..] bytes
           ]
 
-encodeHandshake :: ByteString -> ByteString -> ByteString -> ByteString
+encodeHandshake :: ByteString -> ByteString -> ByteString -> Either String ByteString
 encodeHandshake reserved infoHash peerId
-  | BS.length reserved /= 8 = error "Reserved must be 8 bytes"
-  | BS.length infoHash /= 20 = error "Info hash must be 20 bytes"
-  | BS.length peerId /= 20 = error "Peer ID must be 20 bytes"
+  | BS.length reserved /= 8 = Left "Reserved must be 8 bytes"
+  | BS.length infoHash /= 20 = Left "Info hash must be 20 bytes"
+  | BS.length peerId /= 20 = Left "Peer ID must be 20 bytes"
   | otherwise =
-      BS.concat
+      Right $ BS.concat
         [ BS.singleton 19,
           BC.pack "BitTorrent protocol",
           reserved,
@@ -93,33 +93,33 @@ unpackInt =
   BS.foldl' (\acc b -> (acc `shiftL` 8) .|. fromIntegral b) 0
     . BS.take 4
 
-encodeMessage :: Message -> ByteString
+encodeMessage :: Message -> Either String ByteString
 encodeMessage msg = case msg of
-  KeepAlive -> BS.replicate 4 0
-  Choke -> BS.concat $ packInt 1 : [packSingleInt 0]
-  Unchoke -> BS.concat $ packInt 1 : [packSingleInt 1]
-  Interested -> BS.concat $ packInt 1 : [packSingleInt 2]
-  NotInterested -> BS.concat $ packInt 1 : [packSingleInt 3]
-  Have i -> BS.concat $ packInt 5 : packSingleInt 4 : [packInt i]
-  BitField b -> let l = BS.length b in BS.concat $ packInt (l + 1) : packSingleInt 5 : [b]
-  Request (i, b, l) -> BS.concat $ packInt 13 : packSingleInt 6 : packInt i : packInt b : [packInt l]
-  Piece (i, b, c) -> let l = BS.length c in BS.concat $ packInt (9 + l) : packSingleInt 7 : packInt i : packInt b : [c]
-  Cancel (i, b, l) -> BS.concat $ packInt 13 : packSingleInt 8 : packInt i : packInt b : [packInt l]
-  SuggestPiece i -> BS.concat $ packInt 5 : packSingleInt 13 : [packInt i]
-  HaveAll -> BS.concat $ packInt 1 : [packSingleInt 14]
-  HaveNone -> BS.concat $ packInt 1 : [packSingleInt 15]
-  RejectRequest (i, b, l) -> BS.concat $ packInt 13 : packSingleInt 16 : packInt i : packInt b : [packInt l]
-  AllowedFast i -> BS.concat $ packInt 5 : packSingleInt 17 : [packInt i]
-  Extended (i, d) -> BS.concat $ packInt (2 + BS.length d) : packSingleInt 20 : packSingleInt i : [d]
+  KeepAlive -> Right $ BS.replicate 4 0
+  Choke -> Right $ BS.concat $ packInt 1 : [packSingleInt 0]
+  Unchoke -> Right $ BS.concat $ packInt 1 : [packSingleInt 1]
+  Interested -> Right $ BS.concat $ packInt 1 : [packSingleInt 2]
+  NotInterested -> Right $ BS.concat $ packInt 1 : [packSingleInt 3]
+  Have i -> Right $ BS.concat $ packInt 5 : packSingleInt 4 : [packInt i]
+  BitField b -> let l = BS.length b in Right $ BS.concat $ packInt (l + 1) : packSingleInt 5 : [b]
+  Request (i, b, l) -> Right $ BS.concat $ packInt 13 : packSingleInt 6 : packInt i : packInt b : [packInt l]
+  Piece (i, b, c) -> let l = BS.length c in Right $ BS.concat $ packInt (9 + l) : packSingleInt 7 : packInt i : packInt b : [c]
+  Cancel (i, b, l) -> Right $ BS.concat $ packInt 13 : packSingleInt 8 : packInt i : packInt b : [packInt l]
+  SuggestPiece i -> Right $ BS.concat $ packInt 5 : packSingleInt 13 : [packInt i]
+  HaveAll -> Right $ BS.concat $ packInt 1 : [packSingleInt 14]
+  HaveNone -> Right $ BS.concat $ packInt 1 : [packSingleInt 15]
+  RejectRequest (i, b, l) -> Right $ BS.concat $ packInt 13 : packSingleInt 16 : packInt i : packInt b : [packInt l]
+  AllowedFast i -> Right $ BS.concat $ packInt 5 : packSingleInt 17 : [packInt i]
+  Extended (i, d) -> Right $ BS.concat $ packInt (2 + BS.length d) : packSingleInt 20 : packSingleInt i : [d]
   HashRequest (p, b, i, l, pr)
     | BS.length p /= 32 ->
-        error "Pieces root must be 32 bytes"
-    | otherwise -> BS.concat $ packInt 49 : packSingleInt 21 : p : packInt b : packInt i : packInt l : [packInt pr]
+        Left "Pieces root must be 32 bytes"
+    | otherwise -> Right $ BS.concat $ packInt 49 : packSingleInt 21 : p : packInt b : packInt i : packInt l : [packInt pr]
   Hashes (p, b, i, l, pr, hs)
     | BS.length p /= 32 ->
-        error "Pieces root must be 32 bytes"
+        Left "Pieces root must be 32 bytes"
     | any ((/= 32) . BS.length) hs ->
-        error "Each hash must be 32 bytes"
+        Left "Each hash must be 32 bytes"
     | otherwise ->
         let payload =
               BS.concat $
@@ -129,16 +129,16 @@ encodeMessage msg = case msg of
                   : packInt l
                   : packInt pr
                   : hs
-         in BS.concat
+         in Right $ BS.concat
               [ packInt (1 + BS.length payload),
                 packSingleInt 22,
                 payload
               ]
   HashReject (p, b, i, l, pr)
     | BS.length p /= 32 ->
-        error "Pieces root must be 32 bytes"
+        Left "Pieces root must be 32 bytes"
     | otherwise ->
-        BS.concat $ packInt 49 : packSingleInt 23 : p : packInt b : packInt i : packInt l : [packInt pr]
+        Right $ BS.concat $ packInt 49 : packSingleInt 23 : p : packInt b : packInt i : packInt l : [packInt pr]
 
 slice :: Int -> Int -> ByteString -> ByteString
 slice start len =

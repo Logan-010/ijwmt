@@ -12,8 +12,8 @@ import TestSupport
 tests :: [Test]
 tests =
   [ ("handshake: decode a protocol fixture", assertEqual (Right (reserved, infoHash, peerId)) (decodeHandshake handshake)),
-    ("handshake: encode a protocol fixture", assertEqual handshake (encodeHandshake reserved infoHash peerId)),
-    ("handshake: round trip binary fields", assertEqual (Right (reserved, infoHash, peerId)) (decodeHandshake (encodeHandshake reserved infoHash peerId))),
+    ("handshake: encode a protocol fixture", assertEqual (Right handshake) (encodeHandshake reserved infoHash peerId)),
+    ("handshake: round trip binary fields", assertEqual (Right (reserved, infoHash, peerId)) (encodeHandshake reserved infoHash peerId >>= decodeHandshake)),
     ("reserved: no flags", assertEqual (BS.replicate 8 0) (generateReserved [])),
     ("reserved: all flags", assertEqual reserved (generateReserved [minBound .. maxBound])),
     ("reserved: duplicate flags are idempotent", assertEqual (generateReserved [DHT]) (generateReserved [DHT, DHT])),
@@ -36,13 +36,13 @@ tests =
                   ("four-byte protocol length", word 19 <> BS.drop 1 handshake)
                 ]
        ]
-    ++ [ ("handshake: reject invalid encoder field " ++ show i, assertThrows (encodeHandshake r h p))
+    ++ [ ("handshake: reject invalid encoder field " ++ show i, assertLeft (encodeHandshake r h p))
        | (i, (r, h, p)) <- zip [1 :: Int ..] [("", infoHash, peerId), (reserved, "", peerId), (reserved, infoHash, "")]
        ]
     ++ concat
-      [ [ ("wire: encode " ++ show msg, assertEqual raw (encodeMessage msg)),
+      [ [ ("wire: encode " ++ show msg, assertEqual (Right raw) (encodeMessage msg)),
           ("wire: decode " ++ show msg, assertEqual (Right msg) (decodeMessage raw)),
-          ("wire: round trip " ++ show msg, assertEqual (Right msg) (decodeMessage (encodeMessage msg)))
+          ("wire: round trip " ++ show msg, assertEqual (Right msg) (encodeMessage msg >>= decodeMessage))
         ]
       | (msg, raw) <- messages
       ]
@@ -72,7 +72,7 @@ tests =
               ++ [BS.cons code (BS.replicate n 0) | code <- [21, 23], n <- [47, 49]]
              ++ [BS.cons 22 (BS.replicate n 0) | n <- [47, 49, 79, 81]]
        ]
-    ++ [ ("wire: reject invalid hash encoder " ++ show msg, assertThrows (encodeMessage msg))
+    ++ [ ("wire: reject invalid hash encoder " ++ show msg, assertLeft (encodeMessage msg))
        | msg <- [HashRequest ("", 0, 0, 0, 0), HashReject ("", 0, 0, 0, 0), Hashes ("", 0, 0, 0, 0, []), Hashes (root, 0, 0, 0, 0, ["short"])]
        ]
   where

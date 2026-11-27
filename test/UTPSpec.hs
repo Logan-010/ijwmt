@@ -19,15 +19,15 @@ import TestSupport
 
 tests :: [Test]
 tests =
-  [ ("uTP: encode network-order fixture", assertEqual fixture (encodePacket packet)),
+  [ ("uTP: encode network-order fixture", assertEqual (Right fixture) (encodePacket packet)),
     ("uTP: local port matches bound socket", withSocket $ \sock -> do
         expected <- NS.socketPort sock
         bracket (newUTPSocket sock) closeUTPSocket $ \manager ->
           localPort manager >>= assertEqual expected),
     ("uTP: decode network-order fixture", assertEqual (Right packet) (decodePacket fixture)),
-    ("uTP: extension chain", assertEqual (Right extended) (decodePacket (encodePacket extended))),
-    ("uTP: reject invalid encoder extension", assertThrows (encodePacket packet { extensions = [(0, "")] })),
-    ("uTP: reject oversized encoder extension", assertThrows (encodePacket packet { extensions = [(2, BS.replicate 256 0)] })),
+    ("uTP: extension chain", assertEqual (Right extended) (encodePacket extended >>= decodePacket)),
+    ("uTP: reject invalid encoder extension", assertLeft (encodePacket packet { extensions = [(0, "")] })),
+    ("uTP: reject oversized encoder extension", assertLeft (encodePacket packet { extensions = [(2, BS.replicate 256 0)] })),
     ("uTP: bidirectional multi-packet stream", bounded streamTest),
     ("uTP: retransmission, exact reads, duplicates and sequence wrap", bounded receiveTest),
     ("uTP: retransmit lost DATA acknowledgement", bounded retransmitTest),
@@ -53,12 +53,12 @@ tests =
     ("uTP: accept backlog is bounded and reusable", bounded backlogTest)
   ]
     ++ [("uTP: reject header truncation " ++ show n, assertLeft (decodePacket (BS.take n fixture))) | n <- [0 .. 19]]
-    ++ [("uTP: reject malformed packet " ++ show raw, assertLeft (decodePacket raw))
+    ++ [("uTP: reject malformed packet " ++ show raw, assertLeft (raw >>= decodePacket))
        | raw <-
-           [ BS.cons 0x02 (BS.tail fixture),
-             BS.cons 0x51 (BS.tail fixture),
-             BS.take 1 fixture <> BS.singleton 1 <> BS.drop 2 fixture,
-             BS.take 1 fixture <> BS.singleton 1 <> BS.drop 2 fixture <> BS.pack [0, 4, 1],
+            [ Right (BS.cons 0x02 (BS.tail fixture)),
+              Right (BS.cons 0x51 (BS.tail fixture)),
+              Right (BS.take 1 fixture <> BS.singleton 1 <> BS.drop 2 fixture),
+              Right (BS.take 1 fixture <> BS.singleton 1 <> BS.drop 2 fixture <> BS.pack [0, 4, 1]),
              encodePacket packet { extensions = [(1, "abc")] },
              encodePacket packet { payload = BS.empty },
              encodePacket packet { packetType = State }
@@ -153,7 +153,9 @@ withClient use = withSocket $ \server -> withUTPSocket $ \client _ -> do
     use stream server source syn `finally` abortUTP stream
 
 send :: Socket -> SockAddr -> Packet -> IO ()
-send sock peer pkt = void (NSB.sendTo sock (encodePacket pkt) peer)
+send sock peer pkt = do
+  raw <- either fail pure (encodePacket pkt)
+  void (NSB.sendTo sock raw peer)
 
 receive :: Socket -> IO Packet
 receive sock = do

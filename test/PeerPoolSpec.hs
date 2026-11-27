@@ -26,9 +26,9 @@ tests =
     ("Peer pool: shared listener routes encrypted torrents", bounded (routing True)),
     ("Peer pool: slow peers do not block accepting", bounded slowPeer),
     ("Peer pool: rejects unknown, removed and mismatched torrents", bounded rejectedPeers),
-    ("Peer pool: outgoing encrypted handshake", bounded (outgoing False (handshake firstHash) True)),
-    ("Peer pool: outgoing plaintext fallback handshake", bounded (outgoing True (handshake firstHash) True)),
-    ("Peer pool: outgoing rejects mismatched handshake", bounded (outgoing False (handshake secondHash) False)),
+    ("Peer pool: outgoing encrypted handshake", bounded (handshake firstHash >>= \reply -> outgoing False reply True)),
+    ("Peer pool: outgoing plaintext fallback handshake", bounded (handshake firstHash >>= \reply -> outgoing True reply True)),
+    ("Peer pool: outgoing rejects mismatched handshake", bounded (handshake secondHash >>= \reply -> outgoing False reply False)),
     ("Peer pool: outgoing rejects malformed handshake", bounded (outgoing False (BS.replicate 68 0) False))
   ]
 
@@ -41,8 +41,8 @@ firstHash = SHA1.hash "first torrent"
 secondHash :: BS.ByteString
 secondHash = SHA1.hash "second torrent"
 
-handshake :: BS.ByteString -> BS.ByteString
-handshake infoHash = encodeHandshake (BS.replicate 8 0) infoHash (BS.replicate 20 1)
+handshake :: BS.ByteString -> IO BS.ByteString
+handshake infoHash = either fail pure (encodeHandshake (BS.replicate 8 0) infoHash (BS.replicate 20 1))
 
 withPool :: (PeerPool -> NS.SockAddr -> IO a) -> IO a
 withPool use =
@@ -74,7 +74,8 @@ routing encrypted = withPool $ \pool address -> do
   forM_ [secondHash, firstHash] $ \infoHash ->
     withPeer address $ \peer -> do
       let exchange stream = do
-            writeBytes stream (handshake infoHash <> "payload")
+            raw <- handshake infoHash
+            writeBytes stream (raw <> "payload")
             (_, hash, peerId) <- readBytes stream 68 >>= either fail pure . decodeHandshake
             assertEqual infoHash hash
             assertEqual 20 (BS.length peerId)
@@ -89,7 +90,8 @@ slowPeer = withPool $ \pool address -> do
   registerTorrent pool firstHash $ \stream -> readBytes stream 7 >>= putMVar received
   withPeer address $ \_ ->
     withPeer address $ \peer -> do
-      writeBytes peer (handshake firstHash <> "payload")
+      raw <- handshake firstHash
+      writeBytes peer (raw <> "payload")
       void (readBytes peer 68)
       assertEqual "payload" =<< takeMVar received
 
@@ -98,7 +100,7 @@ rejectedPeers = withPool $ \pool address -> do
   received <- newEmptyMVar
   let handler stream = writeBytes stream "ok" >> putMVar received ()
       rejected infoHash = withPeer address $ \peer -> do
-        writeBytes peer (handshake infoHash)
+        handshake infoHash >>= writeBytes peer
         assertClosed peer
   registerTorrent pool firstHash handler
   rejected secondHash
@@ -107,10 +109,10 @@ rejectedPeers = withPool $ \pool address -> do
   registerTorrent pool firstHash handler
   withPeer address $ \peer -> do
     stream <- initiate firstHash peer
-    writeBytes stream (handshake secondHash)
+    handshake secondHash >>= writeBytes stream
     assertClosed peer
   withPeer address $ \peer -> do
-    writeBytes peer (handshake firstHash)
+    handshake firstHash >>= writeBytes peer
     void (readBytes peer 68)
     assertEqual "ok" =<< readBytes peer 2
     takeMVar received
